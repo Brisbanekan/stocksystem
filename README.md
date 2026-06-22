@@ -1,2 +1,0 @@
-# stocksystem
-cs festival stocksystem
