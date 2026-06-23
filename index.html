@@ -158,8 +158,8 @@
 <header>
   <h1>🎁 年節禮盒庫存系統</h1>
   <nav class="nav">
-    <button id="navGift" class="active" onclick="switchPage('gift')">送禮規劃</button>
-    <button id="navTotal" onclick="switchPage('total')">送禮總表</button>
+    <button id="navTotal" class="active" onclick="switchPage('total')">送禮查詢</button>
+    <button id="navGift" onclick="switchPage('gift')">送禮規劃</button>
     <button id="navManage" onclick="switchPage('manage')">庫存管理</button>
     <button id="navSummary" onclick="switchPage('summary')">年節統整</button>
     <button id="navShip" onclick="switchPage('ship')">出貨明細</button>
@@ -263,7 +263,7 @@
 </div>
 
 <!-- ============ 頁面四：送禮規劃 ============ -->
-<div id="pageGift" class="page active">
+<div id="pageGift" class="page">
   <div class="sumwrap">
     <div class="companybar">
       <button class="ctab" id="ctab-c1" onclick="switchCompany('c1')">公司一</button>
@@ -293,7 +293,7 @@
 </div>
 
 <!-- ============ 頁面：送禮總表（查詢） ============ -->
-<div id="pageTotal" class="page">
+<div id="pageTotal" class="page active">
   <div class="sumwrap">
     <div class="companybar">
       <h2 style="font-size:20px;margin-right:auto">🎁 送禮查詢 · 誰還沒送到</h2>
@@ -992,12 +992,10 @@ function renderTotal(){
         <span class="pill">${y} ${f}</span>
         <span class="pill">${g.length} 位 · ${g.reduce((s,r)=>s+(r.plan||0),0)} 盒</span></div>
       <div style="overflow-x:auto"><table class="totaltable">
-        <thead><tr><th>部門</th><th>送禮對象</th><th>預計</th><th>公益</th><th>聖保羅</th><th>鬥茶王</th><th>備註</th><th>狀態</th></tr></thead><tbody>`;
+        <thead><tr><th>部門</th><th>送禮對象</th><th>狀態</th></tr></thead><tbody>`;
     g.forEach(r=>{
       html+=`<tr>
         <td>${he(r.dept)}</td><td><b>${he(r.target)}</b></td>
-        <td class="c qty">${r.plan||0}</td><td class="c">${r.a||0}</td><td class="c">${r.b||0}</td><td class="c">${r.c||0}</td>
-        <td class="muted">${he(r.note)}</td>
         <td class="c">${statusBadge(r.status)}</td></tr>`;
     });
     html+='</tbody></table></div></div>';
