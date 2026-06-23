@@ -172,9 +172,14 @@
         <button onclick="enterSchedule()">🚚 送禮行程</button>
       </div>
     </div>
-    <button id="navManage" onclick="switchPage('manage')">庫存管理</button>
-    <button id="navSummary" onclick="switchPage('summary')">年節統整</button>
-    <button id="navShip" onclick="switchPage('ship')">出貨明細</button>
+    <div class="navdrop">
+      <button id="navManage" onclick="switchPage('manage')">📦 庫存管理 ▾</button>
+      <div class="navmenu">
+        <button onclick="switchPage('manage')">📦 庫存管理</button>
+        <button onclick="switchPage('summary')">📊 年節統整</button>
+        <button onclick="switchPage('ship')">🚚 出貨明細</button>
+      </div>
+    </div>
   </nav>
   <div class="sync off" id="sync">
     <span class="dot"></span><span id="syncText">未連線</span>
@@ -708,11 +713,10 @@ function renderAll(){renderYearFilter();renderKpis();renderItems();renderTx();re
 /* ---------- 頁面切換 ---------- */
 function switchPage(p){
   const pages={manage:'pageManage', summary:'pageSummary', ship:'pageShip', gift:'pageGift', total:'pageTotal', schedule:'pageSchedule', plan:'pagePlan'};
-  const navs ={manage:'navManage',  summary:'navSummary',  ship:'navShip',  gift:'navPlan',  total:'navTotal', schedule:'navPlan', plan:'navPlan'};
-  for(const k in pages){
-    $(pages[k]).classList.toggle('active', k===p);
-    $(navs[k]).classList.toggle('active', k===p);
-  }
+  const navs ={total:'navTotal', plan:'navPlan', gift:'navPlan', schedule:'navPlan', manage:'navManage', summary:'navManage', ship:'navManage'};
+  for(const k in pages){ const el=$(pages[k]); if(el) el.classList.toggle('active', k===p); }
+  ['navTotal','navPlan','navManage'].forEach(id=>{ const el=$(id); if(el) el.classList.remove('active'); });
+  const navId=navs[p]; if(navId && $(navId)) $(navId).classList.add('active');
 }
 
 /* ---------- 出貨明細 ---------- */
