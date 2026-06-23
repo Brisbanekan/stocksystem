@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>年節禮盒庫存系統 — 原型</title>
+<title>年節禮盒庫存系統</title>
 <style>
   :root{
     --bg:#f4f6f9; --card:#fff; --line:#e4e8ef; --ink:#1f2733; --muted:#6b7686;
@@ -22,6 +22,10 @@
   .nav button.active{background:var(--brand-soft);color:var(--brand)}
   .page{display:none}
   .page.active{display:block}
+  .sync{display:flex;align-items:center;gap:6px;margin-left:auto;font-size:12px}
+  .sync .dot{width:8px;height:8px;border-radius:50%;background:#cbd5e1}
+  .sync.ok .dot{background:var(--in)} .sync.busy .dot{background:#f59e0b} .sync.err .dot{background:var(--out)} .sync.off .dot{background:#94a3b8}
+  .sync button{background:#eef1f6;color:var(--ink);padding:6px 10px;border-radius:8px;font-size:12px}
   .sumwrap{max-width:1100px;margin:0 auto;padding:20px}
   .yearblock{margin-bottom:24px}
   .yearhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
@@ -124,29 +128,23 @@
     .sumwrap{padding:14px}
   }
   @media(max-width:640px){
-    /* 頁首：標題獨立一行，導覽列可橫向捲動 */
     header{padding:10px 14px;flex-wrap:wrap;gap:8px}
     header h1{font-size:15px}
     header .tag{display:none}
-    header .pill{display:none}
+    .sync{margin-left:auto}
     .nav{margin-left:0;width:100%;gap:2px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
     .nav button{flex:0 0 auto;white-space:nowrap;padding:7px 11px}
-    /* KPI 卡片：手機收成 2 欄（覆蓋各頁行內的 3/4/5 欄） */
     .kpis{grid-template-columns:repeat(2,1fr)!important;gap:8px;margin-bottom:14px}
     .kpi{padding:11px}
     .kpi .n{font-size:20px}
     .kpi .l{font-size:11px}
-    /* 容器與卡片留白縮小 */
     .wrap,.sumwrap{padding:12px}
     .card{padding:12px;border-radius:10px}
-    /* 動作按鈕在窄螢幕平均撐滿、好點按 */
     .actions{gap:6px}
     .actions button{flex:1 1 auto}
-    /* 送禮規劃工具列 */
     .ctx{margin-left:0;width:100%}
     .cname{width:100%;flex:1 1 120px}
     .ctx select,.ctx .btn-ghost{flex:1 1 auto}
-    /* LINE 模擬器高度略縮 */
     .line-sim{height:460px}
     .modal{padding:16px}
   }
@@ -155,14 +153,16 @@
 <body>
 <header>
   <h1>🎁 年節禮盒庫存系統</h1>
-  <span class="tag">原型 Prototype</span>
   <nav class="nav">
     <button id="navGift" class="active" onclick="switchPage('gift')">送禮規劃</button>
     <button id="navManage" onclick="switchPage('manage')">庫存管理</button>
     <button id="navSummary" onclick="switchPage('summary')">年節統整</button>
     <button id="navShip" onclick="switchPage('ship')">出貨明細</button>
   </nav>
-  <span class="pill" style="margin-left:auto">年分 × 三節 · Google Sheets 架構</span>
+  <div class="sync off" id="sync">
+    <span class="dot"></span><span id="syncText">未連線</span>
+    <button onclick="boot()" title="重新從試算表載入">🔄 重新整理</button>
+  </div>
 </header>
 
 <!-- ============ 頁面一：庫存管理 ============ -->
@@ -229,7 +229,7 @@
         <button onclick="sendLine()">送出</button>
       </div>
     </div>
-    <p class="hint">模擬器使用與真實 LINE Bot 相同的指令解析邏輯。</p>
+    <p class="hint">此模擬器與真實 LINE Bot 共用同一份試算表資料；指令解析邏輯一致。</p>
   </div>
 </div>
 </div><!-- /pageManage -->
@@ -301,7 +301,7 @@
       <div class="kpi"><div class="n colsheng" id="gKpiB">0</div><div class="l">聖保羅</div></div>
       <div class="kpi"><div class="n coldou" id="gKpiC">0</div><div class="l">鬥茶王</div></div>
     </div>
-    <p class="legend">提示：「已分配」=公益+聖保羅+鬥茶王。當已分配 ≠ 預計總數時，該列左側會亮起橘色（對應你 Excel 的「尚未更新」），方便追蹤還沒決定送哪種禮盒的對象。</p>
+    <p class="legend">提示：「已分配」=公益+聖保羅+鬥茶王。當已分配 ≠ 預計總數時，該列左側會亮起橘色，方便追蹤還沒決定送哪種禮盒的對象。狀態改「已送達」會自動扣庫存並寫入出貨明細。</p>
 
     <div id="giftBody"></div>
   </div>
@@ -386,10 +386,17 @@
 <div class="toast" id="toast"></div>
 
 <script>
+/* =========================================================
+ *  ❶ 設定：貼上你的 Apps Script 網頁應用程式網址（與 LINE 同一條，/exec 結尾）
+ *     若留空或非 https，網頁會以「展示模式」用內建範例資料運作（不連動）。
+ * ========================================================= */
+const API_URL = 'https://script.google.com/macros/s/AKfycbxyJjrvZ3A1Z3DmNOychIw-aYxrT0ZlIsekR0GpDDd8tomVl0piFYX_cciRZ_YV17vMgg/exec';
+const ONLINE = /^https:\/\//.test(API_URL);
+
 /* ---------- 分類定義 ---------- */
 const CATS={A:'公益',B:'聖保羅',C:'鬥茶王'};
 
-/* ---------- 假資料（原型用，正式版改接 Google Sheets） ---------- */
+/* ---------- 資料（展示模式的後備範例；連線模式會被試算表覆蓋） ---------- */
 let seq=1;
 let items = [
   {id:seq++, cat:'A', name:'公益月餅禮盒',   spec:'8入/盒',     year:2026, fest:'中秋', unit:'盒', qty:120},
@@ -400,47 +407,105 @@ let items = [
   {id:seq++, cat:'B', name:'聖保羅春節禮盒',   spec:'12入/盒',    year:2026, fest:'過年', unit:'盒', qty:50},
   {id:seq++, cat:'A', name:'公益鳳梨酥禮盒',   spec:'16入/盒',    year:2025, fest:'過年', unit:'盒', qty:0},
 ];
-let txs = [
-  {time:'06-16 09:12', type:'進料', name:'公益月餅禮盒（2026中秋）', qty:120, bal:120, who:'採購-林', year:2026, fest:'中秋', cat:'A'},
-  {time:'06-15 16:20', type:'出料', name:'鬥茶王烏龍禮盒（2026過年）', qty:40, bal:60, who:'致贈A客戶', year:2026, fest:'過年', cat:'C', target:'A客戶'},
-];
-const today = new Date().toISOString().slice(5,10).replace('-','-'); // mm-dd 對齊 nowStamp
+let txs = [];
 
 /* ---------- 工具 ---------- */
 const $ = id => document.getElementById(id);
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
 function label(i){return `${i.name}（${i.year}${i.fest}）`;}
-
-/* 模糊比對：完全相符 > 連續子字串 > 順序子序列(字按順序出現即可，如「公益禮盒」對到「公益月餅禮盒」) */
-function matchItems(key){
-  const norm=s=>s.toLowerCase().replace(/\s+/g,'');
-  const k=norm(key); if(!k) return [];
-  const isSub=(a,b)=>{let i=0;for(const c of b){if(c===a[i])i++;} return i===a.length;};
-  return items.map(it=>{
-      const n=norm(it.name); let s=0;
-      if(n===k) s=100; else if(n.includes(k)) s=80; else if(isSub(k,n)) s=60;
-      return {it,s};
-    }).filter(x=>x.s>0).sort((a,b)=>b.s-a.s);
-}
-/* 回傳 {status:'ok'|'none'|'ambiguous', item, candidates} */
-function resolveItem(key){
-  const m=matchItems(key);
-  if(!m.length) return {status:'none'};
-  if(m.length===1 || m[0].s>m[1].s) return {status:'ok', item:m[0].it};
-  return {status:'ambiguous', candidates:m.filter(x=>x.s===m[0].s).map(x=>x.it)};
-}
-function ambigMsg(cands){
-  return '🔍 找到多個符合的禮盒，請輸入更完整的名稱：\n'+cands.map(i=>`· ${i.name}（${i.year}${i.fest}）`).join('\n');
-}
 function nowStamp(){const d=new Date();const p=n=>String(n).padStart(2,'0');return `${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;}
+function newLocalId(){return 't'+Date.now().toString(36)+Math.floor(Math.random()*1296).toString(36);}
 
-/* ---------- 核心：庫存異動 ---------- */
-function applyTx(type, item, qty, who){
-  if(type==='進料') item.qty += qty; else item.qty -= qty;
-  txs.unshift({time:nowStamp(), type, name:label(item), qty, bal:item.qty, who:who||'-',
-               year:item.year, fest:item.fest, cat:item.cat,
-               target:(type==='出料'?(who||'').trim():'')});
+/* ---------- 同步狀態列 ---------- */
+function setSync(state, text){
+  const el=$('sync'); if(!el) return;
+  el.className='sync '+state;
+  $('syncText').textContent=text;
+}
+
+/* ---------- 與後端 API 溝通 ---------- */
+async function api(action, payload){
+  // 用純字串 body（text/plain）避免 CORS 預檢；Apps Script 端用 e.postData.contents 解析
+  const res = await fetch(API_URL, {method:'POST', body: JSON.stringify(Object.assign({action}, payload||{}))});
+  let data;
+  try{ data = await res.json(); }catch(e){ throw new Error('回應解析失敗（請確認部署存取權為「任何人」）'); }
+  if(data && data.ok===false) throw new Error(data.error||'伺服器錯誤');
+  return data;
+}
+
+/* ---------- 啟動 / 重新載入 ---------- */
+async function boot(){
+  if(ONLINE){
+    setSync('busy','載入中…');
+    try{
+      const d = await api('load');
+      items = (d.items||[]).map(i=>({id:i.id,cat:i.cat,name:i.name,spec:i.spec,year:Number(i.year),fest:i.fest,unit:i.unit||'盒',qty:Number(i.qty)||0}));
+      txs   = (d.txs||[]).map(t=>({id:t.id,time:t.time,type:t.type,name:t.name,qty:t.qty,bal:t.bal,who:t.who,year:Number(t.year)||'',fest:t.fest,cat:t.cat,target:t.target})).reverse(); // 新到舊
+      plan  = hydratePlan(d.plan||[]);
+      if(d.companies && Object.keys(d.companies).length) companies = d.companies;
+      seq  = items.reduce((m,i)=>Math.max(m,Number(i.id)||0),0)+1;
+      pseq = plan.reduce((m,r)=>Math.max(m,Number(r.id)||0),0)+1;
+      setSync('ok','已同步');
+    }catch(err){
+      console.error(err);
+      setSync('err','連線失敗：'+err.message);
+      toast('連線失敗，暫以本機資料顯示');
+    }
+  }else{
+    setSync('off','展示模式（未連線）');
+  }
   renderAll();
+  switchCompany(curCompany);
+}
+
+function hydratePlan(rows){
+  return rows.map(r=>({
+    id:Number(r.id), co:r.co, year:Number(r.year), fest:r.fest, dept:r.dept, target:r.target,
+    plan:Number(r.plan)||0, a:Number(r.a)||0, b:Number(r.b)||0, c:Number(r.c)||0,
+    note:r.note||'', signer:r.signer||'', status:r.status||'待備貨',
+    shipped: (r.shipped===true||r.shipped==='TRUE'||r.shipped==='true'||r.shipped===1),
+    txRefIds: r.txRefs ? String(r.txRefs).split(',').filter(Boolean) : [],
+    deliveredIds: parseJSONsafe(r.delivered)
+  }));
+}
+function parseJSONsafe(v){ try{ return v? JSON.parse(v):[]; }catch(e){ return []; } }
+
+/* 送禮規劃資料 → 試算表用的序列化格式 */
+function serializePlan(){
+  return plan.map(r=>({
+    id:r.id, co:r.co, year:r.year, fest:r.fest, dept:r.dept, target:r.target,
+    plan:r.plan, a:r.a, b:r.b, c:r.c, note:r.note||'', signer:r.signer||'', status:r.status,
+    shipped:!!r.shipped, txRefs:(r.txRefIds||[]).join(','), delivered:JSON.stringify(r.deliveredIds||[])
+  }));
+}
+let _saveTimer=null;
+function savePlanSoon(){
+  if(!ONLINE) return;
+  setSync('busy','儲存中…');
+  clearTimeout(_saveTimer);
+  _saveTimer=setTimeout(savePlanNow,700);
+}
+async function savePlanNow(){
+  if(!ONLINE) return;
+  clearTimeout(_saveTimer);
+  try{ await api('savePlan',{plan:serializePlan(), companies:companies}); setSync('ok','已同步'); }
+  catch(err){ console.error(err); setSync('err','儲存失敗：'+err.message); }
+}
+
+/* ---------- 核心：庫存異動（連線時走後端，離線時走本機） ---------- */
+async function applyTx(type, item, qty, who){
+  if(ONLINE){
+    const d = await api('applyTx',{type, itemId:item.id, qty, who:who||''});
+    item.qty = d.itemQty;
+    txs.unshift(d.tx);
+  }else{
+    if(type==='進料') item.qty += qty; else item.qty -= qty;
+    txs.unshift({id:newLocalId(), time:nowStamp(), type, name:label(item), qty, bal:item.qty, who:who||'-',
+                 year:item.year, fest:item.fest, cat:item.cat,
+                 target:(type==='出料'?(who||'').trim():'')});
+  }
+  renderAll();
+  return txs[0];
 }
 
 /* ---------- 渲染 ---------- */
@@ -452,45 +517,41 @@ function renderYearFilter(){
 function renderKpis(){
   $('kpiItems').textContent = items.length;
   $('kpiQty').textContent = items.reduce((s,i)=>s+i.qty,0).toLocaleString();
-  $('kpiTx').textContent = txs.filter(t=>t.time.startsWith(nowStamp().slice(0,5))).length;
+  $('kpiTx').textContent = txs.filter(t=>String(t.time).startsWith(nowStamp().slice(0,5))).length;
 }
 function filtered(){
   const y=$('fYear').value, f=$('fFest').value, c=$('fCat').value, q=($('search').value||'').toLowerCase();
   return items.filter(i=>
     (!y||String(i.year)===y) && (!f||i.fest===f) && (!c||i.cat===c) &&
-    (!q||i.name.toLowerCase().includes(q)||i.spec.toLowerCase().includes(q)));
+    (!q||i.name.toLowerCase().includes(q)||(i.spec||'').toLowerCase().includes(q)));
 }
-/* 節日日曆順序（過年→端午→中秋）與排序用索引 */
 const FEST_ORDER={'過年':0, '端午':1, '中秋':2};
 function festIndex(it){ return Number(it.year)*3 + (FEST_ORDER[it.fest]??0); }
-/* 判斷「目前要準備的年節」：某年節將至（進入其發生月份）即視為已備妥，焦點移到下一個。
-   月份近似：1月→今年過年、2-5月→端午、6-8月→中秋、9-12月→隔年過年 */
 function currentFestIndex(d){
   const y=d.getFullYear(), m=d.getMonth()+1;
-  if(m===1) return y*3+0;       // 1月：準備今年過年
-  if(m<=5)  return y*3+1;       // 2-5月：過年已備妥，準備端午
-  if(m<=8)  return y*3+2;       // 6-8月：端午已備妥，準備中秋
-  return (y+1)*3+0;            // 9-12月：中秋已備妥，準備隔年過年
+  if(m===1) return y*3+0;
+  if(m<=5)  return y*3+1;
+  if(m<=8)  return y*3+2;
+  return (y+1)*3+0;
 }
-/* 排序規則：即將到來／未來的年節優先（依日曆先後，越近越上）；已過的年節排在後面（較近期者在前）；同年節再依名稱 a→z */
 function itemCompare(a, b){
   const cur=currentFestIndex(new Date());
   const ia=festIndex(a), ib=festIndex(b);
   const aUp=ia>=cur, bUp=ib>=cur;
-  if(aUp!==bUp) return aUp?-1:1;              // 即將到來/未來在上
-  if(ia!==ib) return aUp ? ia-ib : ib-ia;    // 未來:近的先；已過:較新的先
-  return String(a.name).localeCompare(String(b.name),'zh-Hant'); // 名稱 a→z
+  if(aUp!==bUp) return aUp?-1:1;
+  if(ia!==ib) return aUp ? ia-ib : ib-ia;
+  return String(a.name).localeCompare(String(b.name),'zh-Hant');
 }
 function renderItems(){
   const rows=filtered().sort(itemCompare).map(i=>`<tr>
       <td><span class="cat cat${i.cat}">${i.cat} ${CATS[i.cat]}</span></td>
       <td><b>${i.name}</b></td>
-      <td class="muted">${i.spec}</td>
+      <td class="muted">${i.spec||''}</td>
       <td>${i.year}</td>
       <td><span class="fest">${i.fest}</span></td>
       <td>${i.unit}</td>
       <td style="text-align:right" class="qty ${i.qty===0?'zero':''}">${i.qty}</td>
-      <td style="text-align:right"><button class="icon-del" title="刪除禮盒" onclick="openDeleteModal(${i.id})">🗑</button></td>
+      <td style="text-align:right"><button class="icon-del" title="刪除禮盒" onclick="openDeleteModal(${JSON.stringify(i.id)})">🗑</button></td>
     </tr>`).join('');
   $('itemRows').innerHTML = rows || '<tr><td colspan="8" class="muted">查無禮盒</td></tr>';
 }
@@ -499,12 +560,12 @@ function renderTx(){
   const sign={'進料':'+','出料':'−','刪除':''};
   $('txRows').innerHTML = txs.slice(0,12).map(t=>`<tr>
     <td class="muted">${t.time}</td>
-    <td><span class="badge ${cls[t.type]}">${t.type}</span></td>
+    <td><span class="badge ${cls[t.type]||''}">${t.type}</span></td>
     <td>${t.name}</td>
-    <td style="text-align:right">${sign[t.type]}${t.qty}</td>
+    <td style="text-align:right">${sign[t.type]||''}${t.qty}</td>
     <td style="text-align:right" class="qty">${t.bal}</td>
     <td class="muted">${t.who}</td>
-  </tr>`).join('');
+  </tr>`).join('') || '<tr><td colspan="6" class="muted">尚無異動</td></tr>';
 }
 function renderAll(){renderYearFilter();renderKpis();renderItems();renderTx();renderSummary();renderShipments();}
 
@@ -521,24 +582,21 @@ function switchPage(p){
 /* ---------- 出貨明細 ---------- */
 function renderShipments(){
   const ship=txs.filter(t=>t.type==='出料');
-  $('shKpiQty').textContent='−'+ship.reduce((s,t)=>s+t.qty,0).toLocaleString();
+  $('shKpiQty').textContent='−'+ship.reduce((s,t)=>s+Number(t.qty),0).toLocaleString();
   $('shKpiCount').textContent=ship.length;
   const map={};
-  ship.forEach(t=>{const k=t.target||'(未填對象)'; (map[k]=map[k]||{qty:0,n:0}).qty+=t.qty; map[k].n++;});
+  ship.forEach(t=>{const k=t.target||'(未填對象)'; (map[k]=map[k]||{qty:0,n:0}).qty+=Number(t.qty); map[k].n++;});
   $('shKpiTargets').textContent=Object.keys(map).length;
-  // 各出貨對象彙整（依盒數排序）
   const byT=Object.entries(map).sort((a,b)=>b[1].qty-a[1].qty);
   $('shipByTarget').innerHTML = byT.length
     ? byT.map(([k,v])=>`<tr><td><b>${k}</b></td><td style="text-align:right" class="qty">${v.qty}</td><td style="text-align:right">${v.n}</td></tr>`).join('')
     : '<tr><td colspan="3" class="muted">尚無出貨</td></tr>';
-  // 年分篩選選項
   const years=[...new Set(ship.map(t=>t.year))].sort((a,b)=>b-a);
   const cy=$('shYear').value;
   $('shYear').innerHTML='<option value="">全部年分</option>'+years.map(y=>`<option ${String(y)===cy?'selected':''}>${y}</option>`).join('');
-  // 明細（套用篩選）
   const y=$('shYear').value, f=$('shFest').value, q=($('shSearch').value||'').toLowerCase();
   const rows=ship.filter(t=>(!y||String(t.year)===y)&&(!f||t.fest===f)&&
-      (!q||(t.target||'').toLowerCase().includes(q)||t.name.toLowerCase().includes(q)))
+      (!q||(t.target||'').toLowerCase().includes(q)||(t.name||'').toLowerCase().includes(q)))
     .map(t=>`<tr>
       <td class="muted">${t.time}</td>
       <td><b>${t.target||'<span class=muted>(未填對象)</span>'}</b></td>
@@ -552,23 +610,12 @@ function renderShipments(){
 let companies={c1:{name:'公司一'}, c2:{name:'公司二'}};
 let curCompany='c1';
 let pseq=1;
-/* 範例資料（依你 Excel 的 115 過年名單整理；數字可直接在表格內修改） */
 let plan=[
-  // 公司一 · 2026 過年
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'員工',     target:'員工',                    plan:10, a:10, b:0, c:0, note:'', signer:'同右', status:'已備貨'},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'員工',     target:'許雅君',                  plan:1,  a:1,  b:0, c:0, note:'', signer:'', status:'待備貨'},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'員工',     target:'方新齊',                  plan:1,  a:1,  b:0, c:0, note:'', signer:'', status:'待備貨'},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'業務部',   target:'呂文煜-水上鄉大崙村現任村長', plan:1, a:1, b:0, c:0, note:'關懷社區事務、維持良好關係', signer:'', status:'待備貨'},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'業務部',   target:'余逸操-太保市公所社會課長', plan:1, a:1, b:0, c:0, note:'保持好關係，省公司鄰居', signer:'', status:'待備貨'},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'業務部',   target:'張炯昌',                  plan:1,  a:1,  b:0, c:0, note:'已續租約至 115/8/15', signer:'', status:'待備貨'},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'工務部',   target:'總工務所地主',            plan:2,  a:0,  b:0, c:0, note:'', signer:'', status:'待備貨'},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'工務部',   target:'桔境-廁房楊先生',         plan:1,  a:0,  b:0, c:0, note:'', signer:'', status:'待備貨'},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'工務部',   target:'韻綠-花隆堂',             plan:1,  a:0,  b:0, c:0, note:'', signer:'', status:'待備貨'},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'開發設計部', target:'黎光樺 建築師',          plan:1,  a:0,  b:0, c:0, note:'', signer:'', status:'待備貨'},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'公司',     target:'股東',                    plan:4,  a:0,  b:0, c:0, note:'緒4、凱4', signer:'', status:'待備貨'},
-  // 公司二 · 2026 過年（範例）
-  {id:pseq++, co:'c2', year:2026, fest:'過年', dept:'管理部',   target:'全體同仁',                plan:8,  a:8,  b:0, c:0, note:'', signer:'', status:'待備貨'},
-  {id:pseq++, co:'c2', year:2026, fest:'過年', dept:'業務部',   target:'重要客戶 A',              plan:2,  a:0,  b:2, c:0, note:'', signer:'', status:'待備貨'},
+  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'員工',     target:'員工',   plan:10, a:10, b:0, c:0, note:'', signer:'同右', status:'已備貨', shipped:false, txRefIds:[], deliveredIds:[]},
+  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'員工',     target:'許雅君', plan:1,  a:1,  b:0, c:0, note:'', signer:'', status:'待備貨', shipped:false, txRefIds:[], deliveredIds:[]},
+  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'業務部',   target:'呂文煜-水上鄉大崙村現任村長', plan:1, a:1, b:0, c:0, note:'關懷社區事務、維持良好關係', signer:'', status:'待備貨', shipped:false, txRefIds:[], deliveredIds:[]},
+  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'公司',     target:'股東',   plan:4,  a:0,  b:0, c:0, note:'緒4、凱4', signer:'', status:'待備貨', shipped:false, txRefIds:[], deliveredIds:[]},
+  {id:pseq++, co:'c2', year:2026, fest:'過年', dept:'管理部',   target:'全體同仁', plan:8, a:8, b:0, c:0, note:'', signer:'', status:'待備貨', shipped:false, txRefIds:[], deliveredIds:[]},
 ];
 const STATUS=['待備貨','已備貨','已送達'];
 const CATFIELD={A:'a', B:'b', C:'c'};
@@ -577,11 +624,14 @@ function switchCompany(co){
   curCompany=co;
   $('ctab-c1').classList.toggle('active', co==='c1');
   $('ctab-c2').classList.toggle('active', co==='c2');
-  $('cnameInput').value=companies[co].name;
+  $('cnameInput').value=(companies[co]&&companies[co].name)||co;
   renderGiftPlan();
 }
-function renameCompany(v){ companies[curCompany].name=(v||'').trim()||companies[curCompany].name;
-  $('ctab-'+curCompany).textContent=companies[curCompany].name; }
+function renameCompany(v){
+  companies[curCompany].name=(v||'').trim()||companies[curCompany].name;
+  $('ctab-'+curCompany).textContent=companies[curCompany].name;
+  savePlanSoon();
+}
 
 function gFiltered(){
   const y=$('gYear').value, f=$('gFest').value;
@@ -598,19 +648,16 @@ function alloc(r){return (r.a||0)+(r.b||0)+(r.c||0);}
 function renderGiftPlan(){
   renderGiftYearFilter();
   const rows=gFiltered();
-  // KPI
   $('gKpiTargets').textContent=rows.length;
   $('gKpiPlan').textContent=rows.reduce((s,r)=>s+(r.plan||0),0);
   $('gKpiA').textContent=rows.reduce((s,r)=>s+(r.a||0),0);
   $('gKpiB').textContent=rows.reduce((s,r)=>s+(r.b||0),0);
   $('gKpiC').textContent=rows.reduce((s,r)=>s+(r.c||0),0);
-  // datalist 部門建議
   const depts=[...new Set(plan.filter(r=>r.co===curCompany).map(r=>r.dept))];
   $('deptList').innerHTML=depts.map(d=>`<option value="${d}">`).join('');
 
   if(!rows.length){$('giftBody').innerHTML='<div class="empty">此公司／年節尚無送禮對象，點右上「＋ 新增送禮對象」開始規劃。</div>';return;}
 
-  // 依部門分組（保留出現順序）
   const order=[]; const groups={};
   rows.forEach(r=>{ if(!groups[r.dept]){groups[r.dept]=[];order.push(r.dept);} groups[r.dept].push(r); });
 
@@ -650,7 +697,6 @@ function esc(s){return String(s||'').replace(/"/g,'&quot;');}
 function setGNum(id,field,val){
   const r=plan.find(x=>x.id===id); if(!r)return;
   r[field]=parseInt(val)||0;
-  // 即時更新「已分配」與該列警示，並刷新 KPI（不整頁重繪，保留輸入焦點）
   $('alloc-'+id).textContent=alloc(r);
   $('grow-'+id).classList.toggle('pending', alloc(r)!==(r.plan||0));
   const rows=gFiltered();
@@ -658,38 +704,40 @@ function setGNum(id,field,val){
   $('gKpiA').textContent=rows.reduce((s,x)=>s+(x.a||0),0);
   $('gKpiB').textContent=rows.reduce((s,x)=>s+(x.b||0),0);
   $('gKpiC').textContent=rows.reduce((s,x)=>s+(x.c||0),0);
+  savePlanSoon();
 }
-function setG(id,field,val){const r=plan.find(x=>x.id===id);if(r)r[field]=val;}
+function setG(id,field,val){const r=plan.find(x=>x.id===id);if(r){r[field]=val;savePlanSoon();}}
 
-/* 狀態變更 → 與庫存連動。
-   ・改為「已送達」：自動出料、扣庫存、寫入出貨明細（全有全無，不重複扣），並記錄以供日後復原
-   ・由「已送達」改回其他狀態：復原——把扣掉的庫存加回、移除該筆出貨(出料)紀錄，並解除鎖定可再編輯 */
-function handleStatus(id, newStatus){
+/* 狀態變更 → 與庫存連動（連線時同步寫回試算表） */
+async function handleStatus(id, newStatus){
   const r=plan.find(x=>x.id===id); if(!r) return;
 
   // 已送達 → 復原
   if(r.shipped){
-    if(newStatus==='已送達') return;                  // 沒有變化
-    (r._delivered||[]).forEach(({it,cnt})=>{
-      if(items.includes(it)) it.qty+=cnt;             // 庫存品項還在，直接加回
-      else{                                           // 已被刪除/重建：依分類+年分+節日找回
-        const f=items.find(i=>i.cat===it.cat&&i.year===it.year&&i.fest===it.fest);
-        if(f) f.qty+=cnt;
+    if(newStatus==='已送達') return;
+    try{
+      for(const d of (r.deliveredIds||[])){
+        const it=items.find(i=>String(i.id)===String(d.id));
+        if(ONLINE){ const res=await api('adjustQty',{itemId:d.id,delta:d.cnt}); if(it) it.qty=res.itemQty; }
+        else if(it){ it.qty+=d.cnt; }
       }
-    });
-    const refs=r._txRefs||[];
-    if(refs.length) txs=txs.filter(t=>!refs.includes(t));   // 移除當初寫入的出貨(出料)紀錄
-    r._delivered=null; r._txRefs=null; r.shipped=false; r.status=newStatus;
-    toast(`已復原：${r.target}（庫存已加回，可再編輯）`);
-    renderAll(); renderGiftPlan();
+      if(r.txRefIds && r.txRefIds.length){
+        if(ONLINE) await api('removeTxs',{ids:r.txRefIds});
+        txs=txs.filter(t=>!r.txRefIds.includes(String(t.id)));
+      }
+      r.deliveredIds=[]; r.txRefIds=[]; r.shipped=false; r.status=newStatus;
+      await savePlanNow();
+      toast(`已復原：${r.target}（庫存已加回，可再編輯）`);
+      renderAll(); renderGiftPlan();
+    }catch(err){ console.error(err); toast('復原失敗：'+err.message); renderGiftPlan(); }
     return;
   }
 
-  if(newStatus!=='已送達'){ r.status=newStatus; return; }
+  if(newStatus!=='已送達'){ r.status=newStatus; savePlanSoon(); return; }
 
   // 找出有分配的類別
   const need=Object.keys(CATFIELD).filter(cat=>r[CATFIELD[cat]]>0);
-  if(!need.length){ r.status='已送達'; toast('已標記送達（未分配禮盒，未扣庫存）'); renderGiftPlan(); return; }
+  if(!need.length){ r.status='已送達'; await savePlanNow(); toast('已標記送達（未分配禮盒，未扣庫存）'); renderGiftPlan(); return; }
 
   // 驗證每個類別都有對應庫存且足量（全有全無）
   const toApply=[], problems=[];
@@ -700,17 +748,19 @@ function handleStatus(id, newStatus){
     else if(it.qty<cnt) problems.push(`${it.name} 庫存不足（${it.qty}<${cnt}）`);
     else toApply.push([it,cnt]);
   });
-  if(problems.length){
-    toast('無法送達：'+problems.join('；'));
-    renderGiftPlan();   // 還原下拉為原狀態
-    return;
-  }
-  // 逐類別出料（applyTx 會扣庫存並寫入異動/出貨明細，target=送禮對象），並記錄以便日後復原
-  const delivered=[], txRefs=[];
-  toApply.forEach(([it,cnt])=>{ applyTx('出料', it, cnt, r.target); delivered.push({it,cnt}); txRefs.push(txs[0]); });
-  r.status='已送達'; r.shipped=true; r._delivered=delivered; r._txRefs=txRefs;
-  toast(`已送達並扣庫存：${r.target}`);
-  renderGiftPlan();
+  if(problems.length){ toast('無法送達：'+problems.join('；')); renderGiftPlan(); return; }
+
+  try{
+    const deliveredIds=[], txRefIds=[];
+    for(const [it,cnt] of toApply){
+      const tx=await applyTx('出料', it, cnt, r.target);
+      deliveredIds.push({id:it.id, cnt}); txRefIds.push(String(tx.id));
+    }
+    r.status='已送達'; r.shipped=true; r.deliveredIds=deliveredIds; r.txRefIds=txRefIds;
+    await savePlanNow();
+    toast(`已送達並扣庫存：${r.target}`);
+    renderGiftPlan();
+  }catch(err){ console.error(err); toast('送達失敗：'+err.message); renderAll(); renderGiftPlan(); }
 }
 
 function openGiftModal(){$('giftModal').classList.add('show');}
@@ -721,27 +771,25 @@ function submitGift(){
   const cat=$('giCat').value, qty=parseInt($('giQty').value)||0;
   const row={id:pseq++, co:curCompany, year:parseInt($('gYear').value)||new Date().getFullYear(),
     fest:$('gFest').value, dept, target, plan:qty, a:0, b:0, c:0,
-    note:$('giNote').value.trim(), status:'待備貨'};
-  if(cat) row[CATFIELD[cat]]=qty;   // 選了類別→該類別=數量；未分配→維持 0（列會亮橘色待分配）
+    note:$('giNote').value.trim(), signer:'', status:'待備貨', shipped:false, txRefIds:[], deliveredIds:[]};
+  if(cat) row[CATFIELD[cat]]=qty;
   plan.push(row);
   ['giTarget','giNote'].forEach(i=>$(i).value=''); $('giQty').value=1; $('giCat').value='';
-  closeModal('giftModal'); renderGiftPlan(); toast(`已新增 ${target}`);
+  closeModal('giftModal'); renderGiftPlan(); savePlanNow(); toast(`已新增 ${target}`);
 }
-function delGift(id){const i=plan.findIndex(x=>x.id===id);if(i>=0){const t=plan[i].target;plan.splice(i,1);renderGiftPlan();toast(`已刪除 ${t}`);}}
+function delGift(id){const i=plan.findIndex(x=>x.id===id);if(i>=0){const t=plan[i].target;plan.splice(i,1);renderGiftPlan();savePlanNow();toast(`已刪除 ${t}`);}}
 
 /* ---------- 年節統整報表 ---------- */
-const CATKEYS=['A','B','C'];
 function flowSum(year,fest,type){
-  return txs.filter(t=>t.year===year && t.fest===fest && t.type===type)
-            .reduce((s,t)=>s+t.qty,0);
+  return txs.filter(t=>Number(t.year)===year && t.fest===fest && t.type===type)
+            .reduce((s,t)=>s+Number(t.qty),0);
 }
 function renderSummary(){
   const years=[...new Set(items.map(i=>i.year))].sort((a,b)=>b-a);
-  // 上方 KPI
   $('sKpiYears').textContent=years.length;
   $('sKpiQty').textContent=items.reduce((s,i)=>s+i.qty,0).toLocaleString();
-  $('sKpiIn').textContent='+'+txs.filter(t=>t.type==='進料').reduce((s,t)=>s+t.qty,0).toLocaleString();
-  $('sKpiOut').textContent='−'+txs.filter(t=>t.type==='出料').reduce((s,t)=>s+t.qty,0).toLocaleString();
+  $('sKpiIn').textContent='+'+txs.filter(t=>t.type==='進料').reduce((s,t)=>s+Number(t.qty),0).toLocaleString();
+  $('sKpiOut').textContent='−'+txs.filter(t=>t.type==='出料').reduce((s,t)=>s+Number(t.qty),0).toLocaleString();
 
   if(!years.length){$('summaryBody').innerHTML='<div class="empty">尚無資料</div>';return;}
 
@@ -794,57 +842,84 @@ function openModal(type){
   $('txSubmit').className = type==='進料'?'btn-in':'btn-out';
   $('txModal').classList.add('show');
 }
-function submitTx(){
-  const item=items.find(i=>i.id==$('txItem').value);
+async function submitTx(){
+  const item=items.find(i=>String(i.id)===String($('txItem').value));
   const qty=parseInt($('txQty').value);
   if(!item||!qty||qty<=0){toast('請輸入正確數量');return;}
   if(curType==='出料' && qty>item.qty){toast(`庫存不足，目前僅 ${item.qty} ${item.unit}`);return;}
-  applyTx(curType,item,qty,$('txNote').value);
-  closeModal('txModal');
-  toast(`${curType} ${item.name} ${qty} ${item.unit} ✓`);
+  try{
+    await applyTx(curType,item,qty,$('txNote').value);
+    closeModal('txModal');
+    toast(`${curType} ${item.name} ${qty} ${item.unit} ✓`);
+  }catch(err){ console.error(err); toast('操作失敗：'+err.message); }
 }
 
 /* ---------- Modal：新增禮盒 ---------- */
 function openItemModal(){$('itemModal').classList.add('show');}
-function submitItem(){
+async function submitItem(){
   const name=$('niName').value.trim();
   if(!name){toast('禮盒名稱為必填');return;}
-  items.push({id:seq++, cat:$('niCat').value, name, spec:$('niSpec').value.trim(),
+  const it={cat:$('niCat').value, name, spec:$('niSpec').value.trim(),
     year:parseInt($('niYear').value)||new Date().getFullYear(), fest:$('niFest').value,
-    unit:$('niUnit').value.trim()||'盒', qty:parseInt($('niInit').value)||0});
-  closeModal('itemModal'); $('niName').value=''; $('niSpec').value=''; $('niInit').value=0;
-  renderAll(); toast(`已新增禮盒 ${name}`);
+    unit:$('niUnit').value.trim()||'盒', qty:parseInt($('niInit').value)||0};
+  try{
+    if(ONLINE){ const d=await api('addItem',{item:it}); it.id=d.id; } else { it.id=seq++; }
+    items.push(it);
+    closeModal('itemModal'); $('niName').value=''; $('niSpec').value=''; $('niInit').value=0;
+    renderAll(); toast(`已新增禮盒 ${name}`);
+  }catch(err){ console.error(err); toast('新增失敗：'+err.message); }
 }
 function closeModal(id){$(id).classList.remove('show');}
 
-/* ---------- 刪除禮盒（含異動紀錄留存）---------- */
+/* ---------- 刪除禮盒 ---------- */
 let delId=null;
 function openDeleteModal(id){
-  const it=items.find(i=>i.id===id); if(!it) return;
-  delId=id;
+  const it=items.find(i=>String(i.id)===String(id)); if(!it) return;
+  delId=it.id;
   $('delWarn').innerHTML = it.qty>0
     ? `⚠ <b>${label(it)}</b>目前仍有庫存 <b>${it.qty} ${it.unit}</b>。刪除後將一併移除，無法復原。`
     : `即將刪除 <b>${label(it)}</b>。此動作無法復原。`;
   $('delReason').value='';
   $('delModal').classList.add('show');
 }
-function submitDelete(){
-  const idx=items.findIndex(i=>i.id===delId); if(idx<0) return;
-  const it=items[idx];
+async function submitDelete(){
+  const it=items.find(i=>String(i.id)===String(delId)); if(!it) return;
   const reason=$('delReason').value.trim()||'未填原因';
-  txs.unshift({time:nowStamp(), type:'刪除', name:label(it), qty:it.qty, bal:'—', who:`原因：${reason}`});
-  items.splice(idx,1);
-  closeModal('delModal'); delId=null; renderAll();
-  toast(`已刪除禮盒 ${it.name}`);
+  try{
+    if(ONLINE){ const d=await api('deleteItem',{itemId:it.id, reason}); txs.unshift(d.tx); }
+    else { txs.unshift({id:newLocalId(), time:nowStamp(), type:'刪除', name:label(it), qty:it.qty, bal:'—', who:`原因：${reason}`}); }
+    const idx=items.findIndex(i=>String(i.id)===String(delId)); items.splice(idx,1);
+    closeModal('delModal'); delId=null; renderAll();
+    toast(`已刪除禮盒 ${it.name}`);
+  }catch(err){ console.error(err); toast('刪除失敗：'+err.message); }
 }
 
-/* ---------- LINE 指令解析（與正式 Bot 同邏輯） ---------- */
+/* ---------- LINE 指令解析（與正式 Bot 同邏輯，連線時走後端） ---------- */
 function pushMsg(text,who){
   const d=document.createElement('div');d.className='msg '+who;d.textContent=text;
   $('lineBody').appendChild(d);$('lineBody').scrollTop=$('lineBody').scrollHeight;
 }
 const FESTS=['過年','端午','中秋'];
-function parseCommand(text){
+function matchItems(key){
+  const norm=s=>String(s).toLowerCase().replace(/\s+/g,'');
+  const k=norm(key); if(!k) return [];
+  const isSub=(a,b)=>{let i=0;for(const c of b){if(c===a[i])i++;} return i===a.length;};
+  return items.map(it=>{
+      const n=norm(it.name); let s=0;
+      if(n===k) s=100; else if(n.includes(k)) s=80; else if(isSub(k,n)) s=60;
+      return {it,s};
+    }).filter(x=>x.s>0).sort((a,b)=>b.s-a.s);
+}
+function resolveItem(key){
+  const m=matchItems(key);
+  if(!m.length) return {status:'none'};
+  if(m.length===1 || m[0].s>m[1].s) return {status:'ok', item:m[0].it};
+  return {status:'ambiguous', candidates:m.filter(x=>x.s===m[0].s).map(x=>x.it)};
+}
+function ambigMsg(cands){
+  return '🔍 找到多個符合的禮盒，請輸入更完整的名稱：\n'+cands.map(i=>`· ${i.name}（${i.year}${i.fest}）`).join('\n');
+}
+async function parseCommand(text){
   const parts=text.trim().split(/\s+/);
   const cmd=parts[0];
 
@@ -887,24 +962,24 @@ function parseCommand(text){
     if(res.status==='ambiguous') return ambigMsg(res.candidates);
     const it=res.item;
     if(cmd==='出料' && qty>it.qty) return `❌ ${it.name} 庫存不足，目前僅 ${it.qty} ${it.unit}`;
-    applyTx(cmd, it, qty, extra);
+    await applyTx(cmd, it, qty, extra);
     const sign = cmd==='進料'?'+':'−';
     const xlabel = cmd==='出料'?'出貨對象':'備註';
     return `✅ ${cmd}登記成功\n${label(it)} ${sign}${qty} ${it.unit}\n目前庫存：${it.qty} ${it.unit}`+(extra?`\n${xlabel}：${extra}`:'');
   }
   return '🤔 看不懂指令，輸入「說明」查看用法';
 }
-function sendLine(){
+async function sendLine(){
   const v=$('lineInput').value.trim(); if(!v)return;
   pushMsg(v,'user');$('lineInput').value='';
-  setTimeout(()=>pushMsg(parseCommand(v),'bot'),300);
+  try{ const reply=await parseCommand(v); setTimeout(()=>pushMsg(reply,'bot'),200); }
+  catch(err){ pushMsg('⚠ 操作失敗：'+err.message,'bot'); }
 }
 function quick(t){$('lineInput').value=t;sendLine();}
 
 /* ---------- 啟動 ---------- */
 pushMsg('您好！我是年節禮盒庫存助理 🎁\n輸入「說明」查看指令，或點下方範例試試。','bot');
-renderAll();
-switchCompany('c1');  // 初始化送禮規劃頁
+boot();
 </script>
 </body>
 </html>
