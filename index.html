@@ -164,8 +164,9 @@
 <header>
   <h1>🎁 年節禮盒庫存系統</h1>
   <nav class="nav">
+    <button id="navTotal" class="active" onclick="switchPage('total')">誰還沒送</button>
     <div class="navdrop">
-      <button id="navTotal" class="active" onclick="switchPage('total')">規劃總表 ▾</button>
+      <button id="navPlan" onclick="switchPage('plan')">規劃總表 ▾</button>
       <div class="navmenu">
         <button onclick="enterGift()">📝 送禮規劃</button>
         <button onclick="enterSchedule()">🚚 送禮行程</button>
@@ -317,7 +318,7 @@
 <div id="pageTotal" class="page active">
   <div class="sumwrap">
     <div class="companybar">
-      <h2 style="font-size:20px;margin-right:auto">🎁 規劃總表</h2>
+      <h2 style="font-size:20px;margin-right:auto">📮 誰還沒送</h2>
       <span class="muted" id="totalStamp" style="font-size:12px"></span>
     </div>
     <div class="filters" style="margin-bottom:14px">
@@ -338,6 +339,26 @@
       <div class="kpi"><div class="n" id="tKpiPlan">0</div><div class="l">預計盒數</div></div>
     </div>
     <div id="totalBody"></div>
+  </div>
+</div>
+
+<!-- ============ 頁面：規劃總表（完整規劃內容，唯讀） ============ -->
+<div id="pagePlan" class="page">
+  <div class="sumwrap">
+    <div class="companybar">
+      <h2 style="font-size:20px;margin-right:auto">📋 規劃總表 · 規劃完成後的內容</h2>
+      <span class="muted" id="planStamp" style="font-size:12px"></span>
+    </div>
+    <div class="filters" style="margin-bottom:14px">
+      <select id="plCo" onchange="renderPlan()"><option value="">全部公司</option></select>
+    </div>
+    <div class="kpis" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi"><div class="n" id="pKpiTargets">0</div><div class="l">規劃對象</div></div>
+      <div class="kpi"><div class="n" id="pKpiPlan">0</div><div class="l">預計總盒數</div></div>
+      <div class="kpi"><div class="n flowin" id="pKpiDone">0</div><div class="l">已送達</div></div>
+      <div class="kpi"><div class="n flowout" id="pKpiPending">0</div><div class="l">未送達</div></div>
+    </div>
+    <div id="planBody"></div>
   </div>
 </div>
 
@@ -568,6 +589,7 @@ async function boot(){
   renderAll();
   switchCompany(curCompany);
   renderTotal();
+  renderPlan();
   if(_p.get('view')==='total') switchPage('total');
   initAuth();
 }
@@ -685,8 +707,8 @@ function renderAll(){renderYearFilter();renderKpis();renderItems();renderTx();re
 
 /* ---------- 頁面切換 ---------- */
 function switchPage(p){
-  const pages={manage:'pageManage', summary:'pageSummary', ship:'pageShip', gift:'pageGift', total:'pageTotal', schedule:'pageSchedule'};
-  const navs ={manage:'navManage',  summary:'navSummary',  ship:'navShip',  gift:'navTotal',  total:'navTotal', schedule:'navTotal'};
+  const pages={manage:'pageManage', summary:'pageSummary', ship:'pageShip', gift:'pageGift', total:'pageTotal', schedule:'pageSchedule', plan:'pagePlan'};
+  const navs ={manage:'navManage',  summary:'navSummary',  ship:'navShip',  gift:'navPlan',  total:'navTotal', schedule:'navPlan', plan:'navPlan'};
   for(const k in pages){
     $(pages[k]).classList.toggle('active', k===p);
     $(navs[k]).classList.toggle('active', k===p);
@@ -771,6 +793,7 @@ function renderGiftPlan(){
   $('deptList').innerHTML=depts.map(d=>`<option value="${d}">`).join('');
 
   renderTotal();
+  renderPlan();
   if(!rows.length){$('giftBody').innerHTML='<div class="empty">此公司／年節尚無送禮對象，點右上「＋ 新增送禮對象」開始規劃。</div>';return;}
 
   const order=[]; const groups={};
@@ -1175,6 +1198,53 @@ function renderTotal(){
     html+='</tbody></table></div></div>';
   });
   $('totalBody').innerHTML=html;
+}
+
+/* ---------- 規劃總表（完整內容，唯讀；各公司 × 年節 × 全欄位） ---------- */
+function renderPlan(){
+  if(!document.getElementById('planBody')) return;
+  const cos=[...new Set(plan.map(r=>r.co))];
+  const cc=$('plCo').value;
+  $('plCo').innerHTML='<option value="">全部公司</option>'+cos.map(co=>`<option value="${co}" ${co===cc?'selected':''}>${he((companies[co]&&companies[co].name)||co)}</option>`).join('');
+  const fco=$('plCo').value;
+  const all=plan.filter(r=>!fco||r.co===fco);
+  $('pKpiTargets').textContent=all.length;
+  $('pKpiPlan').textContent=all.reduce((s,r)=>s+(r.plan||0),0).toLocaleString();
+  $('pKpiDone').textContent=all.filter(r=>r.status==='已送達').length;
+  $('pKpiPending').textContent=all.filter(r=>r.status!=='已送達').length;
+  const d=new Date(),p=n=>String(n).padStart(2,'0');
+  $('planStamp').textContent='更新 '+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+  if(!all.length){$('planBody').innerHTML='<div class="empty">尚無送禮規劃</div>';return;}
+  const gcos=[...new Set(all.map(r=>r.co))];
+  let html='';
+  gcos.forEach(co=>{
+    const cname=(companies[co]&&companies[co].name)||co;
+    const crows=all.filter(r=>r.co===co);
+    const cdone=crows.filter(r=>r.status==='已送達').length;
+    html+=`<div class="card yearblock">
+      <div class="yearhead"><h2>🏢 ${he(cname)}</h2>
+        <span class="pill">${crows.length} 位 · 預計 ${crows.reduce((s,r)=>s+(r.plan||0),0)} 盒</span>
+        <span class="pill"><span class="flowin">已送 ${cdone}</span> · <span class="flowout">未送 ${crows.length-cdone}</span></span>
+      </div>`;
+    const combos=[...new Set(crows.map(r=>r.year+'|'+r.fest))].sort().reverse();
+    combos.forEach(cb=>{
+      const pp=cb.split('|'); const yy=pp[0], ff=pp[1];
+      const seg=crows.filter(r=>String(r.year)===yy&&r.fest===ff);
+      html+=`<div style="margin:12px 0 6px"><b>${yy} <span class="fest">${ff}</span></b> <span class="muted" style="font-size:12px">${seg.length} 位 · 預計 ${seg.reduce((s,r)=>s+(r.plan||0),0)} 盒</span></div>`;
+      html+=`<div style="overflow-x:auto"><table class="totaltable">
+        <thead><tr><th>部門</th><th>送禮對象</th><th>預計</th><th>公益</th><th>聖保羅</th><th>鬥茶王</th><th>備註</th><th>狀態</th></tr></thead><tbody>`;
+      seg.forEach(r=>{
+        html+=`<tr>
+          <td>${he(r.dept)}</td><td><b>${he(r.target)}</b></td>
+          <td class="c qty">${r.plan||0}</td><td class="c">${r.a||0}</td><td class="c">${r.b||0}</td><td class="c">${r.c||0}</td>
+          <td class="muted">${he(r.note)}</td>
+          <td class="c">${statusBadge(r.status)}</td></tr>`;
+      });
+      html+='</tbody></table></div>';
+    });
+    html+='</div>';
+  });
+  $('planBody').innerHTML=html;
 }
 
 /* ---------- Modal：進出料 ---------- */
