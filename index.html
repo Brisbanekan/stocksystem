@@ -112,6 +112,16 @@
   .navdrop:hover .navmenu{display:block}
   .navmenu button{display:block;width:100%;text-align:left;background:transparent;color:var(--ink);padding:8px 12px;border-radius:6px;font-size:13px;white-space:nowrap}
   .navmenu button:hover{background:var(--brand-soft);color:var(--brand)}
+  /* 配送行事曆 */
+  .cal{width:100%;border-collapse:collapse;table-layout:fixed}
+  .cal th{background:#faf7f0;border:1px solid var(--line);padding:6px;font-size:12px;color:var(--muted)}
+  .cal td{border:1px solid var(--line);vertical-align:top;height:84px;padding:4px;font-size:12px;overflow:hidden}
+  .cal td.other{background:#fafbfd}
+  .cal td.today{box-shadow:inset 0 0 0 2px var(--brand)}
+  .cal .dnum{font-weight:700;color:var(--muted);font-size:11px}
+  .cal .gchip{display:block;margin-top:3px;padding:2px 6px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cal .gchip.pend{background:#fef3c7;color:#92660a}
+  .cal .gchip.done{background:#dcfce7;color:var(--in)}
   .cat{font-size:11px;padding:2px 8px;border-radius:6px;font-weight:700;color:#fff}
   .catA{background:var(--catA)} .catB{background:var(--catB)} .catC{background:var(--catC)}
   .fest{font-size:11px;background:#f1f3f7;color:#475569;padding:2px 8px;border-radius:20px}
@@ -367,28 +377,43 @@
   </div>
 </div>
 
-<!-- ============ 頁面：送禮行程（待配送清單） ============ -->
+<!-- ============ 頁面：送禮行程（配送行事曆） ============ -->
 <div id="pageSchedule" class="page">
   <div class="sumwrap">
     <div class="companybar">
-      <h2 style="font-size:20px;margin-right:auto">🚚 送禮行程 · 待配送清單</h2>
+      <h2 style="font-size:20px;margin-right:auto">🗓 送禮行程 · 配送行事曆</h2>
       <span class="muted" id="schedStamp" style="font-size:12px"></span>
     </div>
-    <div class="filters" style="margin-bottom:14px">
-      <select id="scYear" onchange="renderSchedule()"></select>
-      <select id="scFest" onchange="renderSchedule()">
+    <div class="filters" style="margin-bottom:12px">
+      <select id="scYear" onchange="onSchedFilter()"></select>
+      <select id="scFest" onchange="onSchedFilter()">
         <option>過年</option><option>端午</option><option>中秋</option></select>
       <select id="scCo" onchange="renderSchedule()"><option value="">全部公司</option></select>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;align-self:center;cursor:pointer">
-        <input type="checkbox" id="scShowDone" style="width:auto" onchange="renderSchedule()"> 顯示已送達
-      </label>
     </div>
-    <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
-      <div class="kpi"><div class="n flowout" id="scKpiPending">0</div><div class="l">待配送</div></div>
-      <div class="kpi"><div class="n flowin" id="scKpiDone">0</div><div class="l">已送達</div></div>
-      <div class="kpi"><div class="n" id="scKpiPlan">0</div><div class="l">預計盒數</div></div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="btn-ghost" onclick="schedMonth(-1)">◀ 上個月</button>
+      <b id="schedMonthLabel" style="font-size:16px;min-width:110px;text-align:center"></b>
+      <button class="btn-ghost" onclick="schedMonth(1)">下個月 ▶</button>
+      <span class="muted" style="font-size:12px">點日曆上的名字可改期／清除／標記送達；下方「待排程」可指定日期</span>
     </div>
-    <div id="scheduleBody"></div>
+    <div id="calBody"></div>
+    <div id="unscheduledBody" style="margin-top:16px"></div>
+  </div>
+</div>
+
+<!-- 配送安排 modal -->
+<div class="modal-bg" id="schedModal">
+  <div class="modal" style="max-width:360px">
+    <h3 id="schedEditTitle">配送安排</h3>
+    <div class="field"><label>配送日期</label><input id="schedDateInput" type="date"></div>
+    <div id="schedDeliverRow" style="margin-bottom:12px"></div>
+    <div class="modal-actions" style="justify-content:space-between">
+      <button class="btn-out" onclick="schedClearDate()">清除日期</button>
+      <span style="display:flex;gap:8px">
+        <button class="btn-ghost" onclick="closeModal('schedModal')">取消</button>
+        <button class="btn-in" onclick="schedSaveDate()">儲存</button>
+      </span>
+    </div>
   </div>
 </div>
 
@@ -600,13 +625,15 @@ async function boot(){
 }
 
 function hydratePlan(rows){
+  let dmap={}; try{ dmap=JSON.parse(localStorage.getItem('giftDates'))||{}; }catch(e){}
   return rows.map(r=>({
     id:Number(r.id), co:r.co, year:Number(r.year), fest:r.fest, dept:r.dept, target:r.target,
     plan:Number(r.plan)||0, a:Number(r.a)||0, b:Number(r.b)||0, c:Number(r.c)||0,
     note:r.note||'', signer:r.signer||'', status:r.status||'待備貨',
     shipped: (r.shipped===true||r.shipped==='TRUE'||r.shipped==='true'||r.shipped===1),
     txRefIds: r.txRefs ? String(r.txRefs).split(',').filter(Boolean) : [],
-    deliveredIds: parseJSONsafe(r.delivered)
+    deliveredIds: parseJSONsafe(r.delivered),
+    date: (r.date || dmap[Number(r.id)] || dmap[r.id] || '')
   }));
 }
 function parseJSONsafe(v){ try{ return v? JSON.parse(v):[]; }catch(e){ return []; } }
@@ -616,7 +643,7 @@ function serializePlan(){
   return plan.map(r=>({
     id:r.id, co:r.co, year:r.year, fest:r.fest, dept:r.dept, target:r.target,
     plan:r.plan, a:r.a, b:r.b, c:r.c, note:r.note||'', signer:r.signer||'', status:r.status,
-    shipped:!!r.shipped, txRefs:(r.txRefIds||[]).join(','), delivered:JSON.stringify(r.deliveredIds||[])
+    shipped:!!r.shipped, txRefs:(r.txRefIds||[]).join(','), delivered:JSON.stringify(r.deliveredIds||[]), date:r.date||''
   }));
 }
 let _saveTimer=null;
@@ -1025,10 +1052,51 @@ function afterEnter(page){
   else if(page==='gift'){ updateUserUI(); renderGiftPlan(); }
 }
 
-/* ====================== 送禮行程（待配送清單） ====================== */
+/* ====================== 送禮行程（配送行事曆） ====================== */
 var _schedInit=false;
+let schedYM=null;
+const FEST_MONTH={'過年':2,'端午':6,'中秋':9};
+let schedEditId=null;
+function saveDatesLocal(){ try{ const m={}; plan.forEach(r=>{ if(r.date) m[r.id]=r.date; }); localStorage.setItem('giftDates', JSON.stringify(m)); }catch(e){} }
+function onSchedFilter(){ schedYM={ y:parseInt($('scYear').value)||new Date().getFullYear(), m:FEST_MONTH[$('scFest').value]||1 }; renderSchedule(); }
+function schedMonth(delta){
+  if(!schedYM) schedYM={y:new Date().getFullYear(), m:1};
+  let m=schedYM.m+delta, y=schedYM.y;
+  if(m<1){m=12;y--;} if(m>12){m=1;y++;}
+  schedYM={y,m}; renderSchedule();
+}
+function setSchedDate(id,val){
+  const r=plan.find(x=>x.id===id); if(!r) return;
+  r.date=val||''; r.signer=currentUser||r.signer;
+  saveDatesLocal(); savePlanSoon(); renderSchedule();
+}
+function openSchedEdit(id){
+  const r=plan.find(x=>x.id===id); if(!r) return;
+  schedEditId=id;
+  $('schedEditTitle').textContent='配送安排 · '+r.target;
+  $('schedDateInput').value=r.date||'';
+  $('schedDeliverRow').innerHTML = (r.status==='已送達')
+    ? `<button class="btn-ghost" onclick="schedToggleDeliver(false)">↩ 改回未送達</button> <span class="muted" style="font-size:12px">目前已送達（改回會把庫存加回）</span>`
+    : `<button class="btn-in" onclick="schedToggleDeliver(true)">✅ 標記已送達（扣庫存）</button>`;
+  $('schedModal').classList.add('show');
+}
+function schedSaveDate(){
+  const r=plan.find(x=>x.id===schedEditId);
+  if(r){ r.date=$('schedDateInput').value||''; r.signer=currentUser||r.signer; saveDatesLocal(); savePlanSoon(); }
+  closeModal('schedModal'); renderSchedule();
+}
+function schedClearDate(){
+  const r=plan.find(x=>x.id===schedEditId);
+  if(r){ r.date=''; saveDatesLocal(); savePlanSoon(); }
+  closeModal('schedModal'); renderSchedule();
+}
+async function schedToggleDeliver(toDelivered){
+  const id=schedEditId; closeModal('schedModal');
+  await handleStatus(id, toDelivered?'已送達':'待備貨');
+  renderSchedule();
+}
 function renderSchedule(){
-  if(!document.getElementById('scheduleBody')) return;
+  if(!document.getElementById('calBody')) return;
   const years=[...new Set(plan.map(r=>r.year))].sort((a,b)=>b-a);
   if(!years.length) years.push(new Date().getFullYear());
   const cy=$('scYear').value;
@@ -1042,41 +1110,48 @@ function renderSchedule(){
     const hasData=plan.some(r=>String(r.year)===String($('scYear').value)&&r.fest===$('scFest').value);
     if(!hasData){ const combo=[...new Set(plan.map(r=>r.year+'|'+r.fest))].sort().reverse()[0]; if(combo){ const pp=combo.split('|'); $('scYear').value=pp[0]; $('scFest').value=pp[1]; } }
   }
-  const y=$('scYear').value, f=$('scFest').value, co=$('scCo').value, showDone=$('scShowDone').checked;
+  const y=$('scYear').value, f=$('scFest').value, co=$('scCo').value;
+  if(!schedYM) schedYM={ y:parseInt(y)||new Date().getFullYear(), m:FEST_MONTH[f]||1 };
   const d=new Date(),p=n=>String(n).padStart(2,'0');
   $('schedStamp').textContent='更新 '+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+  $('schedMonthLabel').textContent=schedYM.y+' 年 '+schedYM.m+' 月';
   const scope=plan.filter(r=>String(r.year)===String(y)&&r.fest===f&&(!co||r.co===co));
-  const pending=scope.filter(r=>r.status!=='已送達');
-  $('scKpiPending').textContent=pending.length;
-  $('scKpiDone').textContent=scope.filter(r=>r.status==='已送達').length;
-  $('scKpiPlan').textContent=scope.reduce((s,r)=>s+(r.plan||0),0).toLocaleString();
-  let rows = showDone ? scope : pending;
-  if(!scope.length){$('scheduleBody').innerHTML=`<div class="empty">${y} ${f}：此年節尚無送禮規劃。</div>`;return;}
-  if(!rows.length){$('scheduleBody').innerHTML=`<div class="empty">🎉 ${y} ${f}：待配送都完成了！</div>`;return;}
-  const gcos=[...new Set(rows.map(r=>r.co))];
-  let html='';
-  gcos.forEach(c=>{
-    const cname=(companies[c]&&companies[c].name)||c;
-    const g=rows.filter(r=>r.co===c);
-    html+=`<div class="card yearblock">
-      <div class="yearhead"><h2>🏢 ${he(cname)}</h2><span class="pill">${y} ${f}</span><span class="pill">待送 ${g.filter(r=>r.status!=='已送達').length} / 共 ${g.length}</span></div>
-      <div style="overflow-x:auto"><table class="totaltable">
-        <thead><tr><th>送達</th><th>送禮對象</th><th>部門</th><th>公益</th><th>聖保羅</th><th>鬥茶王</th><th>狀態</th></tr></thead><tbody>`;
-    g.forEach(r=>{
-      const checked=r.status==='已送達'?'checked':'';
-      html+=`<tr>
-        <td class="c"><input type="checkbox" ${checked} onchange="toggleDeliver(${r.id}, this.checked)" style="width:18px;height:18px;cursor:pointer"></td>
-        <td><b>${he(r.target)}</b></td><td class="muted">${he(r.dept)}</td>
-        <td class="c">${r.a||0}</td><td class="c">${r.b||0}</td><td class="c">${r.c||0}</td>
-        <td class="c">${statusBadge(r.status)}</td></tr>`;
-    });
-    html+='</tbody></table></div></div>';
-  });
-  $('scheduleBody').innerHTML=html;
-}
-async function toggleDeliver(id, checked){
-  await handleStatus(id, checked ? '已送達' : '待備貨');
-  renderSchedule();
+  const byDate={};
+  scope.forEach(r=>{ if(r.date) (byDate[r.date]=byDate[r.date]||[]).push(r); });
+  const startDow=new Date(schedYM.y, schedYM.m-1, 1).getDay();
+  const daysInMonth=new Date(schedYM.y, schedYM.m, 0).getDate();
+  const todayStr=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+  const cells=[];
+  for(let i=0;i<startDow;i++) cells.push(null);
+  for(let day=1;day<=daysInMonth;day++) cells.push(day);
+  while(cells.length%7!==0) cells.push(null);
+  let html='<div style="overflow-x:auto"><table class="cal"><thead><tr>'+['日','一','二','三','四','五','六'].map(w=>`<th>${w}</th>`).join('')+'</tr></thead><tbody>';
+  for(let i=0;i<cells.length;i+=7){
+    html+='<tr>';
+    for(let j=0;j<7;j++){
+      const day=cells[i+j];
+      if(day==null){ html+='<td class="other"></td>'; continue; }
+      const ds=`${schedYM.y}-${p(schedYM.m)}-${p(day)}`;
+      const list=byDate[ds]||[];
+      html+=`<td class="${ds===todayStr?'today':''}"><span class="dnum">${day}</span>`;
+      list.forEach(r=>{ html+=`<span class="gchip ${r.status==='已送達'?'done':'pend'}" onclick="openSchedEdit(${r.id})" title="${he(r.target)}（${he(r.dept)}）">${r.status==='已送達'?'✅':'•'} ${he(r.target)}</span>`; });
+      html+='</td>';
+    }
+    html+='</tr>';
+  }
+  html+='</tbody></table></div>';
+  $('calBody').innerHTML=html;
+  const uns=scope.filter(r=>!r.date);
+  let uh=`<div class="card"><h2>🗓 待排程（${uns.length} 位 / 此年節共 ${scope.length} 位）</h2>`;
+  if(!scope.length){ uh+='<div class="empty">此年節尚無送禮規劃。</div>'; }
+  else if(!uns.length){ uh+='<div class="empty">🎉 所有對象都排好配送日期了！</div>'; }
+  else{
+    uh+='<div style="overflow-x:auto"><table class="totaltable"><thead><tr><th>送禮對象</th><th>部門</th><th>狀態</th><th>指定配送日期</th></tr></thead><tbody>';
+    uns.forEach(r=>{ uh+=`<tr><td><b>${he(r.target)}</b></td><td class="muted">${he(r.dept)}</td><td class="c">${statusBadge(r.status)}</td><td><input type="date" min="${schedYM.y}-${p(schedYM.m)}-01" onchange="setSchedDate(${r.id}, this.value)" style="padding:5px 8px;border:1px solid var(--line);border-radius:7px;font-family:inherit;font-size:13px"></td></tr>`; });
+    uh+='</tbody></table></div>';
+  }
+  uh+='</div>';
+  $('unscheduledBody').innerHTML=uh;
 }
 
 /* ---------- 年節統整報表 ---------- */
