@@ -41,6 +41,15 @@
   .companybar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
   .ctab{padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--muted);font-weight:700;cursor:pointer}
   .ctab.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+  /* 顯眼的新增送禮對象按鈕 */
+  .btn-add{background:var(--brand);color:#fff;font-size:14px;font-weight:700;padding:10px 18px;border-radius:9px;box-shadow:0 2px 8px rgba(184,134,11,.35)}
+  .btn-add:hover{background:#a3760a}
+  .btn-add-sm{background:#fff;color:var(--brand);border:1px solid var(--brand);font-size:12px;font-weight:700;padding:4px 11px;border-radius:20px}
+  .btn-add-sm:hover{background:var(--brand-soft)}
+  /* 送禮規劃數字欄位（點擊開對話視窗） */
+  table.plan .numbtn{width:52px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;color:var(--ink)}
+  table.plan .numbtn:hover{border-color:var(--brand);background:var(--brand-soft);color:var(--brand)}
+  table.plan .numbtn:disabled{background:transparent;border-color:transparent;cursor:default;color:#475569;font-weight:600}
   .ctx{display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap}
   .ctx select{padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;font-family:inherit;background:#fff}
   .cname{padding:7px 10px;border:1px dashed var(--line);border-radius:8px;font-size:14px;font-weight:700;font-family:inherit;width:180px}
@@ -63,8 +72,7 @@
   .statussel{border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;font-family:inherit;background:#fff}
   .legend{font-size:11px;color:var(--muted);margin:4px 0 14px}
   .colpub{color:var(--catA)} .colsheng{color:var(--catB)} .coldou{color:var(--catC)}
-  .wrap{max-width:1220px;margin:0 auto;padding:20px;display:grid;grid-template-columns:1fr 360px;gap:20px}
-  @media(max-width:900px){.wrap{grid-template-columns:1fr}}
+  .wrap{max-width:1100px;margin:0 auto;padding:20px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
   .card h2{font-size:14px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
   .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
@@ -107,17 +115,6 @@
   .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
   .field input,.field select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit}
   .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
-  .line-sim{display:flex;flex-direction:column;height:560px}
-  .line-head{background:var(--line-green);color:#fff;padding:10px 14px;border-radius:12px 12px 0 0;font-weight:700;display:flex;align-items:center;gap:8px;font-size:13px}
-  .line-body{flex:1;background:#8aafc4;padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
-  .msg{max-width:82%;padding:8px 12px;border-radius:14px;font-size:13px;white-space:pre-wrap;line-height:1.45}
-  .msg.user{align-self:flex-end;background:#06c755;color:#fff;border-bottom-right-radius:4px}
-  .msg.bot{align-self:flex-start;background:#fff;color:#1f2733;border-bottom-left-radius:4px}
-  .line-input{display:flex;gap:6px;padding:10px;background:#f0f2f5;border-radius:0 0 12px 12px}
-  .line-input input{flex:1;padding:9px 12px;border:1px solid var(--line);border-radius:20px;font-size:13px;font-family:inherit}
-  .line-input button{background:var(--line-green);color:#fff;border-radius:20px}
-  .chips{display:flex;gap:6px;flex-wrap:wrap;padding:8px 10px;background:#f0f2f5}
-  .chip{font-size:11px;background:#fff;border:1px solid var(--line);padding:4px 9px;border-radius:20px;cursor:pointer;color:var(--muted)}
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f2733;color:#fff;padding:10px 18px;border-radius:24px;font-size:13px;opacity:0;transition:.3s;z-index:99}
   .toast.show{opacity:1}
   .hint{font-size:11px;color:var(--muted);margin-top:6px}
@@ -145,7 +142,6 @@
     .ctx{margin-left:0;width:100%}
     .cname{width:100%;flex:1 1 120px}
     .ctx select,.ctx .btn-ghost{flex:1 1 auto}
-    .line-sim{height:460px}
     .modal{padding:16px}
   }
 </style>
@@ -168,7 +164,6 @@
 <!-- ============ 頁面一：庫存管理 ============ -->
 <div id="pageManage" class="page">
 <div class="wrap">
-  <!-- LEFT -->
   <div>
     <div class="kpis">
       <div class="kpi"><div class="n" id="kpiItems">0</div><div class="l">禮盒品項數</div></div>
@@ -210,26 +205,6 @@
         </table>
       </div>
     </div>
-  </div>
-
-  <!-- RIGHT -->
-  <div>
-    <div class="card line-sim" style="padding:0;overflow:hidden">
-      <div class="line-head">💬 LINE 禮盒庫存助理（模擬）</div>
-      <div class="line-body" id="lineBody"></div>
-      <div class="chips">
-        <span class="chip" onclick="quick('進料 公益月餅禮盒 50')">進料 公益月餅禮盒 50</span>
-        <span class="chip" onclick="quick('出料 鬥茶王烏龍禮盒 20 致贈廠商')">出料 20</span>
-        <span class="chip" onclick="quick('庫存 中秋')">庫存 中秋</span>
-        <span class="chip" onclick="quick('庫存')">全部庫存</span>
-        <span class="chip" onclick="quick('說明')">說明</span>
-      </div>
-      <div class="line-input">
-        <input id="lineInput" placeholder="例如：進料 公益月餅禮盒 100" onkeydown="if(event.key==='Enter')sendLine()">
-        <button onclick="sendLine()">送出</button>
-      </div>
-    </div>
-    <p class="hint">此模擬器與真實 LINE Bot 共用同一份試算表資料；指令解析邏輯一致。</p>
   </div>
 </div>
 </div><!-- /pageManage -->
@@ -290,7 +265,7 @@
         <select id="gYear" onchange="renderGiftPlan()"></select>
         <select id="gFest" onchange="renderGiftPlan()">
           <option>過年</option><option>端午</option><option>中秋</option></select>
-        <button class="btn-ghost" onclick="openGiftModal()">＋ 新增送禮對象</button>
+        <button class="btn-add" onclick="openGiftModal()">＋ 新增送禮對象</button>
       </div>
     </div>
 
@@ -379,6 +354,20 @@
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeModal('giftModal')">取消</button>
       <button class="btn-in" onclick="submitGift()">新增</button>
+    </div>
+  </div>
+</div>
+
+<!-- number edit modal -->
+<div class="modal-bg" id="numModal">
+  <div class="modal" style="max-width:340px">
+    <h3 id="numTitle">編輯數量</h3>
+    <p class="muted" id="numWho" style="margin:-6px 0 12px;font-weight:700"></p>
+    <div class="field"><label id="numLabel">數量（盒）</label>
+      <input id="numInput" type="number" min="0" value="0" onkeydown="if(event.key==='Enter')submitNum()"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('numModal')">取消</button>
+      <button class="btn-in" onclick="submitNum()">確認</button>
     </div>
   </div>
 </div>
@@ -666,7 +655,7 @@ function renderGiftPlan(){
     const g=groups[dept];
     const sub=g.reduce((s,r)=>s+(r.plan||0),0);
     html+=`<div class="card deptcard">
-      <div class="depthead"><span class="dn">🏷 ${dept}</span><span class="pill">${g.length} 位 · 預計 ${sub} 盒</span></div>
+      <div class="depthead"><span class="dn">🏷 ${dept}</span><span class="pill">${g.length} 位 · 預計 ${sub} 盒</span><button class="btn-add-sm" onclick="openGiftModal('${esc(dept).replace(/'/g,"\\'")}')">＋ 新增送禮對象</button></div>
       <div style="overflow-x:auto"><table class="plan">
       <thead><tr>
         <th class="tname">送禮對象</th>
@@ -678,10 +667,10 @@ function renderGiftPlan(){
       const dis=r.shipped?'disabled':'';
       html+=`<tr id="grow-${r.id}" class="${pend?'pending':''}${r.shipped?' shipped':''}">
         <td class="tname"><input value="${esc(r.target)}" ${dis} onchange="setG(${r.id},'target',this.value)"></td>
-        <td class="numcell"><input class="num" type="number" min="0" value="${r.plan}" ${dis} onchange="setGNum(${r.id},'plan',this.value)"></td>
-        <td class="numcell"><input class="num" type="number" min="0" value="${r.a}" ${dis} onchange="setGNum(${r.id},'a',this.value)"></td>
-        <td class="numcell"><input class="num" type="number" min="0" value="${r.b}" ${dis} onchange="setGNum(${r.id},'b',this.value)"></td>
-        <td class="numcell"><input class="num" type="number" min="0" value="${r.c}" ${dis} onchange="setGNum(${r.id},'c',this.value)"></td>
+        <td class="numcell"><button class="numbtn" ${dis} onclick="openNumModal(${r.id},'plan')">${r.plan}</button></td>
+        <td class="numcell"><button class="numbtn" ${dis} onclick="openNumModal(${r.id},'a')">${r.a}</button></td>
+        <td class="numcell"><button class="numbtn" ${dis} onclick="openNumModal(${r.id},'b')">${r.b}</button></td>
+        <td class="numcell"><button class="numbtn" ${dis} onclick="openNumModal(${r.id},'c')">${r.c}</button></td>
         <td class="numcell alloc" id="alloc-${r.id}">${alloc(r)}</td>
         <td><input value="${esc(r.note)}" ${dis} onchange="setG(${r.id},'note',this.value)" style="min-width:160px"></td>
         <td><select class="statussel" onchange="handleStatus(${r.id},this.value)">${STATUS.map(s=>`<option ${s===r.status?'selected':''}>${s}</option>`).join('')}</select>${r.shipped?' <span class="pill" title="已扣庫存；改回其他狀態會自動把庫存加回並移除該筆出貨紀錄">已扣庫存</span>':''}</td>
@@ -694,19 +683,30 @@ function renderGiftPlan(){
 }
 function esc(s){return String(s||'').replace(/"/g,'&quot;');}
 
-function setGNum(id,field,val){
-  const r=plan.find(x=>x.id===id); if(!r)return;
-  r[field]=parseInt(val)||0;
-  $('alloc-'+id).textContent=alloc(r);
-  $('grow-'+id).classList.toggle('pending', alloc(r)!==(r.plan||0));
-  const rows=gFiltered();
-  $('gKpiPlan').textContent=rows.reduce((s,x)=>s+(x.plan||0),0);
-  $('gKpiA').textContent=rows.reduce((s,x)=>s+(x.a||0),0);
-  $('gKpiB').textContent=rows.reduce((s,x)=>s+(x.b||0),0);
-  $('gKpiC').textContent=rows.reduce((s,x)=>s+(x.c||0),0);
+function setG(id,field,val){const r=plan.find(x=>x.id===id);if(r){r[field]=val;savePlanSoon();}}
+
+/* 數字欄位：點擊開對話視窗編輯 */
+const FIELD_LABEL={plan:'預計總數', a:'公益', b:'聖保羅', c:'鬥茶王'};
+let numCtx={id:null, field:null};
+function openNumModal(id,field){
+  const r=plan.find(x=>x.id===id); if(!r) return;
+  if(r.shipped){ toast('此列已扣庫存，請先把狀態改回再編輯'); return; }
+  numCtx={id, field};
+  $('numTitle').textContent='編輯「'+FIELD_LABEL[field]+'」數量';
+  $('numWho').textContent=r.target;
+  $('numLabel').textContent=FIELD_LABEL[field]+'（盒）';
+  $('numInput').value=r[field]||0;
+  $('numModal').classList.add('show');
+  setTimeout(()=>{const el=$('numInput');el.focus();el.select();},50);
+}
+function submitNum(){
+  const r=plan.find(x=>x.id===numCtx.id);
+  if(!r){closeModal('numModal');return;}
+  r[numCtx.field]=Math.max(0, parseInt($('numInput').value)||0);
+  closeModal('numModal');
+  renderGiftPlan();
   savePlanSoon();
 }
-function setG(id,field,val){const r=plan.find(x=>x.id===id);if(r){r[field]=val;savePlanSoon();}}
 
 /* 狀態變更 → 與庫存連動（連線時同步寫回試算表） */
 async function handleStatus(id, newStatus){
@@ -763,7 +763,11 @@ async function handleStatus(id, newStatus){
   }catch(err){ console.error(err); toast('送達失敗：'+err.message); renderAll(); renderGiftPlan(); }
 }
 
-function openGiftModal(){$('giftModal').classList.add('show');}
+function openGiftModal(dept){
+  $('giDept').value = (typeof dept==='string') ? dept : '';
+  $('giftModal').classList.add('show');
+  setTimeout(()=>$( (typeof dept==='string'&&dept) ? 'giTarget':'giDept').focus(),50);
+}
 function submitGift(){
   const target=$('giTarget').value.trim();
   const dept=$('giDept').value.trim()||'未分類';
@@ -894,91 +898,10 @@ async function submitDelete(){
   }catch(err){ console.error(err); toast('刪除失敗：'+err.message); }
 }
 
-/* ---------- LINE 指令解析（與正式 Bot 同邏輯，連線時走後端） ---------- */
-function pushMsg(text,who){
-  const d=document.createElement('div');d.className='msg '+who;d.textContent=text;
-  $('lineBody').appendChild(d);$('lineBody').scrollTop=$('lineBody').scrollHeight;
-}
+/* 年節順序（年節統整報表使用） */
 const FESTS=['過年','端午','中秋'];
-function matchItems(key){
-  const norm=s=>String(s).toLowerCase().replace(/\s+/g,'');
-  const k=norm(key); if(!k) return [];
-  const isSub=(a,b)=>{let i=0;for(const c of b){if(c===a[i])i++;} return i===a.length;};
-  return items.map(it=>{
-      const n=norm(it.name); let s=0;
-      if(n===k) s=100; else if(n.includes(k)) s=80; else if(isSub(k,n)) s=60;
-      return {it,s};
-    }).filter(x=>x.s>0).sort((a,b)=>b.s-a.s);
-}
-function resolveItem(key){
-  const m=matchItems(key);
-  if(!m.length) return {status:'none'};
-  if(m.length===1 || m[0].s>m[1].s) return {status:'ok', item:m[0].it};
-  return {status:'ambiguous', candidates:m.filter(x=>x.s===m[0].s).map(x=>x.it)};
-}
-function ambigMsg(cands){
-  return '🔍 找到多個符合的禮盒，請輸入更完整的名稱：\n'+cands.map(i=>`· ${i.name}（${i.year}${i.fest}）`).join('\n');
-}
-async function parseCommand(text){
-  const parts=text.trim().split(/\s+/);
-  const cmd=parts[0];
-
-  if(/^(說明|help|\?|？)$/i.test(cmd)){
-    return '📖 指令說明\n進料 <禮盒名> <數量> [備註]\n出料 <禮盒名> <數量> [出貨對象]\n庫存 <禮盒名>　查單一禮盒\n庫存 <節日>　依過年/端午/中秋查\n庫存　　　　列出全部\n規格 <禮盒名>　查規格';
-  }
-  if(cmd==='庫存'){
-    const arg=parts.slice(1).join(' ');
-    if(arg && FESTS.includes(arg)){
-      const list=items.filter(i=>i.fest===arg);
-      if(!list.length) return `查無「${arg}」禮盒`;
-      return `🎁 ${arg}禮盒庫存：\n`+list.map(i=>`· [${i.cat}] ${i.name} ${i.qty} ${i.unit}（${i.year}）`).join('\n');
-    }
-    if(arg){
-      const res=resolveItem(arg);
-      if(res.status==='none') return `❓ 找不到禮盒「${arg}」`;
-      if(res.status==='ambiguous') return ambigMsg(res.candidates);
-      const it=res.item;
-      return `🎁 ${it.name}\n分類：${it.cat} ${CATS[it.cat]}\n年分/節日：${it.year} ${it.fest}\n規格：${it.spec}\n即時庫存：${it.qty} ${it.unit}`;
-    }
-    if(!items.length) return '目前無任何禮盒';
-    return '🎁 全部禮盒庫存：\n'+items.map(i=>`· [${i.cat}] ${i.name} ${i.qty}${i.unit}（${i.year}${i.fest}）`).join('\n');
-  }
-  if(cmd==='規格'){
-    const res=resolveItem(parts.slice(1).join(' '));
-    if(res.status==='none') return '❓ 找不到禮盒';
-    if(res.status==='ambiguous') return ambigMsg(res.candidates);
-    const it=res.item;
-    return `📐 ${it.name}\n規格：${it.spec}\n分類：${it.cat} ${CATS[it.cat]}\n單位：${it.unit}`;
-  }
-  if(['進料','出料'].includes(cmd)){
-    if(parts.length<3) return `格式：${cmd} <禮盒名> <數量> [${cmd==='出料'?'出貨對象':'備註'}]`;
-    let qtyIdx=parts.findIndex((p,i)=>i>0 && /^\d+$/.test(p));
-    if(qtyIdx<0) return '❓ 請輸入數量，例如：'+cmd+' 公益月餅禮盒 100';
-    const name=parts.slice(1,qtyIdx).join(' ');
-    const qty=parseInt(parts[qtyIdx]);
-    const extra=parts.slice(qtyIdx+1).join(' ');
-    const res=resolveItem(name);
-    if(res.status==='none') return `❓ 找不到禮盒「${name}」，可先在網頁新增`;
-    if(res.status==='ambiguous') return ambigMsg(res.candidates);
-    const it=res.item;
-    if(cmd==='出料' && qty>it.qty) return `❌ ${it.name} 庫存不足，目前僅 ${it.qty} ${it.unit}`;
-    await applyTx(cmd, it, qty, extra);
-    const sign = cmd==='進料'?'+':'−';
-    const xlabel = cmd==='出料'?'出貨對象':'備註';
-    return `✅ ${cmd}登記成功\n${label(it)} ${sign}${qty} ${it.unit}\n目前庫存：${it.qty} ${it.unit}`+(extra?`\n${xlabel}：${extra}`:'');
-  }
-  return '🤔 看不懂指令，輸入「說明」查看用法';
-}
-async function sendLine(){
-  const v=$('lineInput').value.trim(); if(!v)return;
-  pushMsg(v,'user');$('lineInput').value='';
-  try{ const reply=await parseCommand(v); setTimeout(()=>pushMsg(reply,'bot'),200); }
-  catch(err){ pushMsg('⚠ 操作失敗：'+err.message,'bot'); }
-}
-function quick(t){$('lineInput').value=t;sendLine();}
 
 /* ---------- 啟動 ---------- */
-pushMsg('您好！我是年節禮盒庫存助理 🎁\n輸入「說明」查看指令，或點下方範例試試。','bot');
 boot();
 </script>
 </body>
