@@ -265,6 +265,7 @@
         <select id="gYear" onchange="renderGiftPlan()"></select>
         <select id="gFest" onchange="renderGiftPlan()">
           <option>過年</option><option>端午</option><option>中秋</option></select>
+        <button class="btn-ghost" onclick="openCopyModal()">⧉ 複製清單</button>
         <button class="btn-add" onclick="openGiftModal()">＋ 新增送禮對象</button>
       </div>
     </div>
@@ -354,6 +355,27 @@
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeModal('giftModal')">取消</button>
       <button class="btn-in" onclick="submitGift()">新增</button>
+    </div>
+  </div>
+</div>
+
+<!-- copy list modal -->
+<div class="modal-bg" id="copyModal">
+  <div class="modal">
+    <h3>⧉ 複製送禮清單</h3>
+    <p class="muted" id="copyTo" style="margin:-6px 0 14px;font-weight:700"></p>
+    <div class="field"><label>從哪一份清單沿用對象（來源）</label>
+      <select id="copySource"></select></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer">
+      <input type="checkbox" id="copyAlloc" style="width:auto"> 同時複製禮盒分配（公益／聖保羅／鬥茶王）
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;cursor:pointer">
+      <input type="checkbox" id="copySkipDup" checked style="width:auto"> 略過目前清單已存在的對象（避免重複）
+    </label>
+    <p class="hint" style="margin-bottom:10px">會沿用「部門・對象・預計數量・備註」；狀態一律重設為「待備貨」。未勾選分配時，禮盒分配會留空待你重新決定。</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('copyModal')">取消</button>
+      <button class="btn-in" onclick="submitCopy()">複製</button>
     </div>
   </div>
 </div>
@@ -763,6 +785,40 @@ async function handleStatus(id, newStatus){
   }catch(err){ console.error(err); toast('送達失敗：'+err.message); renderAll(); renderGiftPlan(); }
 }
 
+/* 複製清單：把某個年節的送禮對象沿用到目前年節 */
+function openCopyModal(){
+  const y=$('gYear').value, f=$('gFest').value;
+  const cur=y+'|'+f;
+  const combos=[...new Set(plan.filter(r=>r.co===curCompany).map(r=>r.year+'|'+r.fest))].filter(c=>c!==cur);
+  if(!combos.length){ toast('目前沒有其他年節清單可沿用'); return; }
+  $('copyTo').textContent='沿用到目前清單：'+((companies[curCompany]&&companies[curCompany].name)||curCompany)+' · '+y+' '+f;
+  $('copySource').innerHTML=combos.sort().reverse().map(c=>{
+    const [yy,ff]=c.split('|');
+    const n=plan.filter(r=>r.co===curCompany&&String(r.year)===yy&&r.fest===ff).length;
+    return `<option value="${yy}|${ff}">${yy} ${ff}（${n} 位）</option>`;
+  }).join('');
+  $('copyAlloc').checked=false; $('copySkipDup').checked=true;
+  $('copyModal').classList.add('show');
+}
+function submitCopy(){
+  const y=parseInt($('gYear').value)||new Date().getFullYear(), f=$('gFest').value;
+  const [sy,sf]=$('copySource').value.split('|');
+  const copyAlloc=$('copyAlloc').checked, skipDup=$('copySkipDup').checked;
+  const src=plan.filter(r=>r.co===curCompany && String(r.year)===sy && r.fest===sf);
+  const key=r=>r.dept+'|'+r.target;
+  const existing=new Set(plan.filter(r=>r.co===curCompany && r.year===y && r.fest===f).map(key));
+  let added=0, skipped=0;
+  src.forEach(r=>{
+    if(skipDup && existing.has(key(r))){ skipped++; return; }
+    plan.push({id:pseq++, co:curCompany, year:y, fest:f, dept:r.dept, target:r.target,
+      plan:r.plan||0, a:copyAlloc?(r.a||0):0, b:copyAlloc?(r.b||0):0, c:copyAlloc?(r.c||0):0,
+      note:r.note||'', signer:r.signer||'', status:'待備貨', shipped:false, txRefIds:[], deliveredIds:[]});
+    existing.add(key(r)); added++;
+  });
+  closeModal('copyModal');
+  renderGiftPlan(); savePlanNow();
+  toast(added ? `已沿用 ${added} 位${skipped?`，略過 ${skipped} 位重複`:''}` : '沒有新增（對象都已存在）');
+}
 function openGiftModal(dept){
   $('giDept').value = (typeof dept==='string') ? dept : '';
   $('giftModal').classList.add('show');
