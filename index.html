@@ -108,8 +108,9 @@
   .totaltable td.c{text-align:center}
   /* 導覽下拉選單 */
   .navdrop{position:relative;display:inline-flex}
-  .navmenu{position:absolute;top:calc(100% + 2px);left:0;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(15,23,42,.14);min-width:150px;padding:4px;display:none;z-index:30}
-  .navdrop:hover .navmenu{display:block}
+  .navmenu{position:absolute;top:calc(100% + 2px);left:0;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(15,23,42,.18);min-width:160px;padding:4px;display:none;z-index:60}
+  .navdrop:hover .navmenu, .navdrop.open .navmenu{display:block}
+  .navdrop:last-child .navmenu{left:auto;right:0}
   .navmenu button{display:block;width:100%;text-align:left;background:transparent;color:var(--ink);padding:8px 12px;border-radius:6px;font-size:13px;white-space:nowrap}
   .navmenu button:hover{background:var(--brand-soft);color:var(--brand)}
   /* 配送行事曆 */
@@ -153,8 +154,15 @@
     header h1{font-size:15px}
     header .tag{display:none}
     .sync{margin-left:auto}
-    .nav{margin-left:0;width:100%;gap:2px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
-    .nav button{flex:0 0 auto;white-space:nowrap;padding:7px 11px}
+    .nav{margin-left:0;width:100%;gap:6px;flex-wrap:wrap}
+    .nav>button,.navdrop>button{white-space:nowrap;padding:8px 12px}
+    .navmenu{min-width:170px}
+    /* 配送行事曆在手機縮小格高與字級 */
+    .cal{table-layout:fixed}
+    .cal th{padding:3px;font-size:11px}
+    .cal td{height:56px;padding:2px}
+    .cal .dnum{font-size:10px}
+    .cal .gchip{font-size:10px;padding:1px 4px;margin-top:2px}
     .kpis{grid-template-columns:repeat(2,1fr)!important;gap:8px;margin-bottom:14px}
     .kpi{padding:11px}
     .kpi .n{font-size:20px}
@@ -174,20 +182,21 @@
 <header>
   <h1>🎁 年節禮盒庫存系統</h1>
   <nav class="nav">
-    <button id="navTotal" class="active" onclick="switchPage('total')">誰還沒送</button>
-    <div class="navdrop">
-      <button id="navPlan" onclick="switchPage('plan')">規劃總表 ▾</button>
+    <button id="navTotal" class="active" onclick="navGo('total')">誰還沒送</button>
+    <div class="navdrop" id="drop-plan">
+      <button id="navPlan" onclick="toggleNav('drop-plan')">規劃總表 ▾</button>
       <div class="navmenu">
-        <button onclick="enterGift()">📝 送禮規劃</button>
-        <button onclick="enterSchedule()">🚚 送禮行程</button>
+        <button onclick="navGo('plan')">📋 規劃總表</button>
+        <button onclick="navGo('gift')">📝 送禮規劃</button>
+        <button onclick="navGo('schedule')">🚚 送禮行程</button>
       </div>
     </div>
-    <div class="navdrop">
-      <button id="navManage" onclick="switchPage('manage')">📦 庫存管理 ▾</button>
+    <div class="navdrop" id="drop-inv">
+      <button id="navManage" onclick="toggleNav('drop-inv')">📦 庫存管理 ▾</button>
       <div class="navmenu">
-        <button onclick="switchPage('manage')">📦 庫存管理</button>
-        <button onclick="switchPage('summary')">📊 年節統整</button>
-        <button onclick="switchPage('ship')">🚚 出貨明細</button>
+        <button onclick="navGo('manage')">📦 庫存管理</button>
+        <button onclick="navGo('summary')">📊 年節統整</button>
+        <button onclick="navGo('ship')">🚚 出貨明細</button>
       </div>
     </div>
   </nav>
@@ -745,6 +754,21 @@ function switchPage(p){
   ['navTotal','navPlan','navManage'].forEach(id=>{ const el=$(id); if(el) el.classList.remove('active'); });
   const navId=navs[p]; if(navId && $(navId)) $(navId).classList.add('active');
 }
+/* 導覽下拉：手機點擊展開（桌機 hover 也可）*/
+function toggleNav(id){
+  const el=document.getElementById(id); if(!el) return;
+  const wasOpen=el.classList.contains('open');
+  closeNav();
+  if(!wasOpen) el.classList.add('open');
+}
+function closeNav(){ document.querySelectorAll('.navdrop.open').forEach(d=>d.classList.remove('open')); }
+function navGo(page){
+  closeNav();
+  if(page==='gift') enterGift();
+  else if(page==='schedule') enterSchedule();
+  else switchPage(page);
+}
+document.addEventListener('click', function(e){ if(!e.target.closest('.navdrop')) closeNav(); });
 
 /* ---------- 出貨明細 ---------- */
 function renderShipments(){
