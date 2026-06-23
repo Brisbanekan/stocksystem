@@ -938,6 +938,9 @@ function statusBadge(s){
   const map={'已送達':'b-in','已備貨':'b-prep','待備貨':'b-del'};
   return `<span class="badge ${map[s]||'b-del'}">${s||'待備貨'}</span>`;
 }
+function sentBadge(s){
+  return s==='已送達' ? '<span class="badge b-in">✅ 已送</span>' : '<span class="badge b-out">⏳ 未送</span>';
+}
 var _totalInit=false;
 function renderTotal(){
   if(!document.getElementById('totalBody')) return;
@@ -992,10 +995,10 @@ function renderTotal(){
         <span class="pill">${y} ${f}</span>
         <span class="pill">${g.length} 位 · ${g.reduce((s,r)=>s+(r.plan||0),0)} 盒</span></div>
       <div style="overflow-x:auto"><table class="totaltable">
-        <thead><tr><th>部門</th><th>送禮對象</th><th>狀態</th></tr></thead><tbody>`;
+        <thead><tr><th>送達</th><th>送禮對象</th><th>狀態</th></tr></thead><tbody>`;
     g.forEach(r=>{
       html+=`<tr>
-        <td>${he(r.dept)}</td><td><b>${he(r.target)}</b></td>
+        <td class="c">${sentBadge(r.status)}</td><td><b>${he(r.target)}</b></td>
         <td class="c">${statusBadge(r.status)}</td></tr>`;
     });
     html+='</tbody></table></div></div>';
