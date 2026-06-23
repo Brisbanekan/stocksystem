@@ -296,7 +296,7 @@
 <div id="pageTotal" class="page active">
   <div class="sumwrap">
     <div class="companybar">
-      <h2 style="font-size:20px;margin-right:auto">🎁 送禮查詢 · 誰還沒送到</h2>
+      <h2 style="font-size:20px;margin-right:auto">🎁 送禮查詢</h2>
       <span class="muted" id="totalStamp" style="font-size:12px"></span>
     </div>
     <div class="filters" style="margin-bottom:14px">
@@ -304,7 +304,7 @@
       <select id="gtFest" onchange="renderTotal()">
         <option>過年</option><option>端午</option><option>中秋</option></select>
       <select id="gtCo" onchange="renderTotal()"><option value="">全部公司</option></select>
-      <select id="gtStatus" onchange="renderTotal()">
+      <select id="gtStatus" onchange="renderTotal()" style="background:var(--brand-soft);border-color:var(--brand);color:#92660a;font-weight:700">
         <option value="pending">只看還沒送到</option>
         <option value="all">全部</option>
         <option value="done">只看已送達</option>
