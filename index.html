@@ -98,6 +98,14 @@
   .b-in{background:#dcfce7;color:var(--in)}
   .b-out{background:#fee2e2;color:var(--out)}
   .b-del{background:#e5e7eb;color:#475569}
+  .b-prep{background:#fef3c7;color:#92660a}
+  /* 截圖模式：隱藏頁首，只留總表 */
+  body.shot header{display:none}
+  body.shot{background:#fff}
+  .totaltable{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:6px}
+  .totaltable th,.totaltable td{border:1px solid var(--line);padding:6px 9px;text-align:left;white-space:nowrap}
+  .totaltable thead th{background:#faf7f0;font-size:11px;color:var(--muted)}
+  .totaltable td.c{text-align:center}
   .cat{font-size:11px;padding:2px 8px;border-radius:6px;font-weight:700;color:#fff}
   .catA{background:var(--catA)} .catB{background:var(--catB)} .catC{background:var(--catC)}
   .fest{font-size:11px;background:#f1f3f7;color:#475569;padding:2px 8px;border-radius:20px}
@@ -151,6 +159,7 @@
   <h1>🎁 年節禮盒庫存系統</h1>
   <nav class="nav">
     <button id="navGift" class="active" onclick="switchPage('gift')">送禮規劃</button>
+    <button id="navTotal" onclick="switchPage('total')">送禮總表</button>
     <button id="navManage" onclick="switchPage('manage')">庫存管理</button>
     <button id="navSummary" onclick="switchPage('summary')">年節統整</button>
     <button id="navShip" onclick="switchPage('ship')">出貨明細</button>
@@ -280,6 +289,23 @@
     <p class="legend">提示：「已分配」=公益+聖保羅+鬥茶王。當已分配 ≠ 預計總數時，該列左側會亮起橘色，方便追蹤還沒決定送哪種禮盒的對象。狀態改「已送達」會自動扣庫存並寫入出貨明細。</p>
 
     <div id="giftBody"></div>
+  </div>
+</div>
+
+<!-- ============ 頁面：送禮總表 ============ -->
+<div id="pageTotal" class="page">
+  <div class="sumwrap">
+    <div id="totalTitle" style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">
+      <h2 style="font-size:20px">🎁 送禮總表</h2>
+      <span class="muted" id="totalStamp" style="font-size:12px"></span>
+    </div>
+    <div class="kpis" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi"><div class="n" id="tKpiTargets">0</div><div class="l">規劃對象</div></div>
+      <div class="kpi"><div class="n" id="tKpiPlan">0</div><div class="l">預計總盒數</div></div>
+      <div class="kpi"><div class="n flowin" id="tKpiDone">0</div><div class="l">已送達</div></div>
+      <div class="kpi"><div class="n flowout" id="tKpiPending">0</div><div class="l">未送達</div></div>
+    </div>
+    <div id="totalBody"></div>
   </div>
 </div>
 
@@ -446,6 +472,8 @@ async function api(action, payload){
 
 /* ---------- 啟動 / 重新載入 ---------- */
 async function boot(){
+  const _p=new URLSearchParams(location.search);
+  if(_p.get('shot')==='1') document.body.classList.add('shot');
   if(ONLINE){
     setSync('busy','載入中…');
     try{
@@ -467,6 +495,8 @@ async function boot(){
   }
   renderAll();
   switchCompany(curCompany);
+  renderTotal();
+  if(_p.get('view')==='total') switchPage('total');
 }
 
 function hydratePlan(rows){
@@ -582,8 +612,8 @@ function renderAll(){renderYearFilter();renderKpis();renderItems();renderTx();re
 
 /* ---------- 頁面切換 ---------- */
 function switchPage(p){
-  const pages={manage:'pageManage', summary:'pageSummary', ship:'pageShip', gift:'pageGift'};
-  const navs ={manage:'navManage',  summary:'navSummary',  ship:'navShip',  gift:'navGift'};
+  const pages={manage:'pageManage', summary:'pageSummary', ship:'pageShip', gift:'pageGift', total:'pageTotal'};
+  const navs ={manage:'navManage',  summary:'navSummary',  ship:'navShip',  gift:'navGift',  total:'navTotal'};
   for(const k in pages){
     $(pages[k]).classList.toggle('active', k===p);
     $(navs[k]).classList.toggle('active', k===p);
@@ -667,6 +697,7 @@ function renderGiftPlan(){
   const depts=[...new Set(plan.filter(r=>r.co===curCompany).map(r=>r.dept))];
   $('deptList').innerHTML=depts.map(d=>`<option value="${d}">`).join('');
 
+  renderTotal();
   if(!rows.length){$('giftBody').innerHTML='<div class="empty">此公司／年節尚無送禮對象，點右上「＋ 新增送禮對象」開始規劃。</div>';return;}
 
   const order=[]; const groups={};
@@ -888,6 +919,57 @@ function renderSummary(){
     html+='</tbody></table></div></div>';
   });
   $('summaryBody').innerHTML=html;
+}
+
+/* ---------- 送禮總表（跨公司 × 年節彙整） ---------- */
+function he(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function statusBadge(s){
+  const map={'已送達':'b-in','已備貨':'b-prep','待備貨':'b-del'};
+  return `<span class="badge ${map[s]||'b-del'}">${s||'待備貨'}</span>`;
+}
+function renderTotal(){
+  if(!document.getElementById('totalBody')) return;
+  const all=plan.slice();
+  $('tKpiTargets').textContent=all.length;
+  $('tKpiPlan').textContent=all.reduce((s,r)=>s+(r.plan||0),0).toLocaleString();
+  const done=all.filter(r=>r.status==='已送達').length;
+  $('tKpiDone').textContent=done;
+  $('tKpiPending').textContent=all.length-done;
+  const d=new Date(),p=n=>String(n).padStart(2,'0');
+  $('totalStamp').textContent='更新：'+d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+
+  if(!all.length){$('totalBody').innerHTML='<div class="empty">尚無送禮規劃</div>';return;}
+
+  const cos=[...new Set(all.map(r=>r.co))];
+  let html='';
+  cos.forEach(co=>{
+    const cname=(companies[co]&&companies[co].name)||co;
+    const crows=all.filter(r=>r.co===co);
+    const cdone=crows.filter(r=>r.status==='已送達').length;
+    html+=`<div class="card yearblock">
+      <div class="yearhead"><h2>🏢 ${he(cname)}</h2>
+        <span class="pill">${crows.length} 位 · 預計 ${crows.reduce((s,r)=>s+(r.plan||0),0)} 盒</span>
+        <span class="pill"><span class="flowin">已送 ${cdone}</span> · <span class="flowout">未送 ${crows.length-cdone}</span></span>
+      </div>`;
+    const combos=[...new Set(crows.map(r=>r.year+'|'+r.fest))].sort().reverse();
+    combos.forEach(cb=>{
+      const parts=cb.split('|'); const yy=parts[0], ff=parts[1];
+      const seg=crows.filter(r=>String(r.year)===yy&&r.fest===ff);
+      html+=`<div style="margin:12px 0 6px"><b>${yy} <span class="fest">${ff}</span></b> <span class="muted" style="font-size:12px">${seg.length} 位 · 預計 ${seg.reduce((s,r)=>s+(r.plan||0),0)} 盒</span></div>`;
+      html+=`<div style="overflow-x:auto"><table class="totaltable">
+        <thead><tr><th>部門</th><th>送禮對象</th><th>預計</th><th>公益</th><th>聖保羅</th><th>鬥茶王</th><th>備註</th><th>狀態</th></tr></thead><tbody>`;
+      seg.forEach(r=>{
+        html+=`<tr>
+          <td>${he(r.dept)}</td><td><b>${he(r.target)}</b></td>
+          <td class="c qty">${r.plan||0}</td><td class="c">${r.a||0}</td><td class="c">${r.b||0}</td><td class="c">${r.c||0}</td>
+          <td class="muted">${he(r.note)}</td>
+          <td class="c">${statusBadge(r.status)}</td></tr>`;
+      });
+      html+='</tbody></table></div>';
+    });
+    html+='</div>';
+  });
+  $('totalBody').innerHTML=html;
 }
 
 /* ---------- Modal：進出料 ---------- */
