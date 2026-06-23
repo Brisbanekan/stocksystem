@@ -106,6 +106,12 @@
   .totaltable th,.totaltable td{border:1px solid var(--line);padding:6px 9px;text-align:left;white-space:nowrap}
   .totaltable thead th{background:#faf7f0;font-size:11px;color:var(--muted)}
   .totaltable td.c{text-align:center}
+  /* 導覽下拉選單 */
+  .navdrop{position:relative;display:inline-flex}
+  .navmenu{position:absolute;top:calc(100% + 2px);left:0;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(15,23,42,.14);min-width:150px;padding:4px;display:none;z-index:30}
+  .navdrop:hover .navmenu{display:block}
+  .navmenu button{display:block;width:100%;text-align:left;background:transparent;color:var(--ink);padding:8px 12px;border-radius:6px;font-size:13px;white-space:nowrap}
+  .navmenu button:hover{background:var(--brand-soft);color:var(--brand)}
   .cat{font-size:11px;padding:2px 8px;border-radius:6px;font-weight:700;color:#fff}
   .catA{background:var(--catA)} .catB{background:var(--catB)} .catC{background:var(--catC)}
   .fest{font-size:11px;background:#f1f3f7;color:#475569;padding:2px 8px;border-radius:20px}
@@ -158,8 +164,13 @@
 <header>
   <h1>🎁 年節禮盒庫存系統</h1>
   <nav class="nav">
-    <button id="navTotal" class="active" onclick="switchPage('total')">送禮查詢</button>
-    <button id="navGift" onclick="switchPage('gift')">送禮規劃</button>
+    <div class="navdrop">
+      <button id="navTotal" class="active" onclick="switchPage('total')">規劃總表 ▾</button>
+      <div class="navmenu">
+        <button onclick="enterGift()">📝 送禮規劃</button>
+        <button onclick="enterSchedule()">🚚 送禮行程</button>
+      </div>
+    </div>
     <button id="navManage" onclick="switchPage('manage')">庫存管理</button>
     <button id="navSummary" onclick="switchPage('summary')">年節統整</button>
     <button id="navShip" onclick="switchPage('ship')">出貨明細</button>
@@ -265,6 +276,16 @@
 <!-- ============ 頁面四：送禮規劃 ============ -->
 <div id="pageGift" class="page">
   <div class="sumwrap">
+    <div id="userBar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:13px">
+      <span class="pill" style="background:var(--brand-soft);color:var(--brand)">👤 編輯者：<b id="curUserName">—</b></span>
+      <button class="btn-ghost" style="padding:5px 10px" onclick="logout()">登出</button>
+      <span id="rootTools" style="display:none;align-items:center;gap:6px">
+        <span class="muted">·</span>
+        <input id="newUserName" placeholder="新增用戶名稱" style="padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-family:inherit" onkeydown="if(event.key==='Enter')addUser()">
+        <button class="btn-ghost" style="padding:5px 10px" onclick="addUser()">＋ 新增用戶</button>
+        <span class="muted" id="userListShow" style="font-size:12px"></span>
+      </span>
+    </div>
     <div class="companybar">
       <button class="ctab" id="ctab-c1" onclick="switchCompany('c1')">公司一</button>
       <button class="ctab" id="ctab-c2" onclick="switchCompany('c2')">公司二</button>
@@ -296,7 +317,7 @@
 <div id="pageTotal" class="page active">
   <div class="sumwrap">
     <div class="companybar">
-      <h2 style="font-size:20px;margin-right:auto">🎁 送禮查詢</h2>
+      <h2 style="font-size:20px;margin-right:auto">🎁 規劃總表</h2>
       <span class="muted" id="totalStamp" style="font-size:12px"></span>
     </div>
     <div class="filters" style="margin-bottom:14px">
@@ -317,6 +338,46 @@
       <div class="kpi"><div class="n" id="tKpiPlan">0</div><div class="l">預計盒數</div></div>
     </div>
     <div id="totalBody"></div>
+  </div>
+</div>
+
+<!-- ============ 頁面：送禮行程（待配送清單） ============ -->
+<div id="pageSchedule" class="page">
+  <div class="sumwrap">
+    <div class="companybar">
+      <h2 style="font-size:20px;margin-right:auto">🚚 送禮行程 · 待配送清單</h2>
+      <span class="muted" id="schedStamp" style="font-size:12px"></span>
+    </div>
+    <div class="filters" style="margin-bottom:14px">
+      <select id="scYear" onchange="renderSchedule()"></select>
+      <select id="scFest" onchange="renderSchedule()">
+        <option>過年</option><option>端午</option><option>中秋</option></select>
+      <select id="scCo" onchange="renderSchedule()"><option value="">全部公司</option></select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;align-self:center;cursor:pointer">
+        <input type="checkbox" id="scShowDone" style="width:auto" onchange="renderSchedule()"> 顯示已送達
+      </label>
+    </div>
+    <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
+      <div class="kpi"><div class="n flowout" id="scKpiPending">0</div><div class="l">待配送</div></div>
+      <div class="kpi"><div class="n flowin" id="scKpiDone">0</div><div class="l">已送達</div></div>
+      <div class="kpi"><div class="n" id="scKpiPlan">0</div><div class="l">預計盒數</div></div>
+    </div>
+    <div id="scheduleBody"></div>
+  </div>
+</div>
+
+<!-- login modal -->
+<div class="modal-bg" id="loginModal">
+  <div class="modal" style="max-width:360px">
+    <h3>🔒 請先登入</h3>
+    <p class="muted" id="loginHint" style="margin:-6px 0 12px">進入「送禮規劃」需要輸入用戶名稱</p>
+    <div class="field"><label>用戶名稱（預設 ROOT）</label>
+      <input id="loginName" list="userList" placeholder="ROOT" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()">
+      <datalist id="userList"></datalist></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('loginModal')">取消</button>
+      <button class="btn-in" onclick="doLogin()">進入</button>
+    </div>
   </div>
 </div>
 
@@ -508,6 +569,7 @@ async function boot(){
   switchCompany(curCompany);
   renderTotal();
   if(_p.get('view')==='total') switchPage('total');
+  initAuth();
 }
 
 function hydratePlan(rows){
@@ -623,8 +685,8 @@ function renderAll(){renderYearFilter();renderKpis();renderItems();renderTx();re
 
 /* ---------- 頁面切換 ---------- */
 function switchPage(p){
-  const pages={manage:'pageManage', summary:'pageSummary', ship:'pageShip', gift:'pageGift', total:'pageTotal'};
-  const navs ={manage:'navManage',  summary:'navSummary',  ship:'navShip',  gift:'navGift',  total:'navTotal'};
+  const pages={manage:'pageManage', summary:'pageSummary', ship:'pageShip', gift:'pageGift', total:'pageTotal', schedule:'pageSchedule'};
+  const navs ={manage:'navManage',  summary:'navSummary',  ship:'navShip',  gift:'navTotal',  total:'navTotal', schedule:'navTotal'};
   for(const k in pages){
     $(pages[k]).classList.toggle('active', k===p);
     $(navs[k]).classList.toggle('active', k===p);
@@ -747,7 +809,7 @@ function renderGiftPlan(){
 }
 function esc(s){return String(s||'').replace(/"/g,'&quot;');}
 
-function setG(id,field,val){const r=plan.find(x=>x.id===id);if(r){r[field]=val;savePlanSoon();}}
+function setG(id,field,val){const r=plan.find(x=>x.id===id);if(r){r[field]=val;r.signer=currentUser||r.signer;savePlanSoon();}}
 
 /* 數字欄位：點擊開對話視窗編輯 */
 const FIELD_LABEL={plan:'預計總數', a:'公益', b:'聖保羅', c:'鬥茶王'};
@@ -767,6 +829,7 @@ function submitNum(){
   const r=plan.find(x=>x.id===numCtx.id);
   if(!r){closeModal('numModal');return;}
   r[numCtx.field]=Math.max(0, parseInt($('numInput').value)||0);
+  r.signer=currentUser||r.signer;
   closeModal('numModal');
   renderGiftPlan();
   savePlanSoon();
@@ -873,13 +936,121 @@ function submitGift(){
   const cat=$('giCat').value, qty=parseInt($('giQty').value)||0;
   const row={id:pseq++, co:curCompany, year:parseInt($('gYear').value)||new Date().getFullYear(),
     fest:$('gFest').value, dept, target, plan:qty, a:0, b:0, c:0,
-    note:$('giNote').value.trim(), signer:'', status:'待備貨', shipped:false, txRefIds:[], deliveredIds:[]};
+    note:$('giNote').value.trim(), signer:(currentUser||''), status:'待備貨', shipped:false, txRefIds:[], deliveredIds:[]};
   if(cat) row[CATFIELD[cat]]=qty;
   plan.push(row);
   ['giTarget','giNote'].forEach(i=>$(i).value=''); $('giQty').value=1; $('giCat').value='';
   closeModal('giftModal'); renderGiftPlan(); savePlanNow(); toast(`已新增 ${target}`);
 }
 function delGift(id){const i=plan.findIndex(x=>x.id===id);if(i>=0){const t=plan[i].target;plan.splice(i,1);renderGiftPlan();savePlanNow();toast(`已刪除 ${t}`);}}
+
+/* ====================== 登入 / 用戶管理（軟性入口，記錄編輯者） ====================== */
+let users=['ROOT'];
+let currentUser='';
+let pendingPage=null;
+function initAuth(){
+  try{ const u=JSON.parse(localStorage.getItem('giftUsers')); if(Array.isArray(u)&&u.length) users=u; }catch(e){}
+  if(users.indexOf('ROOT')<0) users.unshift('ROOT');
+  currentUser=localStorage.getItem('giftUser')||'';
+  if(currentUser && !users.some(u=>u.toLowerCase()===currentUser.toLowerCase())) currentUser='';
+  updateUserUI();
+}
+function saveUsers(){ try{ localStorage.setItem('giftUsers', JSON.stringify(users)); }catch(e){} }
+function updateUserUI(){
+  if($('curUserName')) $('curUserName').textContent=currentUser||'未登入';
+  if($('rootTools')) $('rootTools').style.display=(currentUser==='ROOT')?'inline-flex':'none';
+  if($('userListShow')) $('userListShow').textContent='現有用戶：'+users.join('、');
+  if($('userList')) $('userList').innerHTML=users.map(u=>`<option value="${he(u)}">`).join('');
+}
+function enterGift(){ gateThen('gift'); }
+function enterSchedule(){ gateThen('schedule'); }
+function gateThen(page){
+  if(currentUser){ switchPage(page); afterEnter(page); return; }
+  pendingPage=page;
+  $('loginHint').textContent='進入「'+(page==='gift'?'送禮規劃':'送禮行程')+'」需要輸入用戶名稱';
+  if($('userList')) $('userList').innerHTML=users.map(u=>`<option value="${he(u)}">`).join('');
+  $('loginName').value='';
+  $('loginModal').classList.add('show');
+  setTimeout(()=>$('loginName').focus(),50);
+}
+function doLogin(){
+  const name=$('loginName').value.trim();
+  if(!name){ toast('請輸入用戶名稱'); return; }
+  const match=users.find(u=>u.toLowerCase()===name.toLowerCase());
+  if(!match){ toast('查無此用戶名稱，請洽 ROOT 新增'); return; }
+  currentUser=match;
+  try{ localStorage.setItem('giftUser', currentUser); }catch(e){}
+  closeModal('loginModal'); updateUserUI();
+  const p=pendingPage||'gift'; pendingPage=null;
+  switchPage(p); afterEnter(p);
+  toast('已登入：'+currentUser);
+}
+function logout(){ currentUser=''; try{ localStorage.removeItem('giftUser'); }catch(e){} updateUserUI(); switchPage('total'); toast('已登出'); }
+function addUser(){
+  if(currentUser!=='ROOT'){ toast('只有 ROOT 能新增用戶'); return; }
+  const n=$('newUserName').value.trim();
+  if(!n){ toast('請輸入用戶名稱'); return; }
+  if(n.toLowerCase()==='root'||users.some(u=>u.toLowerCase()===n.toLowerCase())){ toast('用戶已存在'); return; }
+  users.push(n); saveUsers(); $('newUserName').value=''; updateUserUI(); toast('已新增用戶：'+n);
+}
+function afterEnter(page){
+  if(page==='schedule'){ renderSchedule(); }
+  else if(page==='gift'){ updateUserUI(); renderGiftPlan(); }
+}
+
+/* ====================== 送禮行程（待配送清單） ====================== */
+var _schedInit=false;
+function renderSchedule(){
+  if(!document.getElementById('scheduleBody')) return;
+  const years=[...new Set(plan.map(r=>r.year))].sort((a,b)=>b-a);
+  if(!years.length) years.push(new Date().getFullYear());
+  const cy=$('scYear').value;
+  $('scYear').innerHTML=years.map(y=>`<option ${String(y)===cy?'selected':''}>${y}</option>`).join('');
+  if(!$('scYear').value) $('scYear').value=String(years[0]);
+  const cos=[...new Set(plan.map(r=>r.co))];
+  const cc=$('scCo').value;
+  $('scCo').innerHTML='<option value="">全部公司</option>'+cos.map(co=>`<option value="${co}" ${co===cc?'selected':''}>${he((companies[co]&&companies[co].name)||co)}</option>`).join('');
+  if(!_schedInit){
+    _schedInit=true;
+    const hasData=plan.some(r=>String(r.year)===String($('scYear').value)&&r.fest===$('scFest').value);
+    if(!hasData){ const combo=[...new Set(plan.map(r=>r.year+'|'+r.fest))].sort().reverse()[0]; if(combo){ const pp=combo.split('|'); $('scYear').value=pp[0]; $('scFest').value=pp[1]; } }
+  }
+  const y=$('scYear').value, f=$('scFest').value, co=$('scCo').value, showDone=$('scShowDone').checked;
+  const d=new Date(),p=n=>String(n).padStart(2,'0');
+  $('schedStamp').textContent='更新 '+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+  const scope=plan.filter(r=>String(r.year)===String(y)&&r.fest===f&&(!co||r.co===co));
+  const pending=scope.filter(r=>r.status!=='已送達');
+  $('scKpiPending').textContent=pending.length;
+  $('scKpiDone').textContent=scope.filter(r=>r.status==='已送達').length;
+  $('scKpiPlan').textContent=scope.reduce((s,r)=>s+(r.plan||0),0).toLocaleString();
+  let rows = showDone ? scope : pending;
+  if(!scope.length){$('scheduleBody').innerHTML=`<div class="empty">${y} ${f}：此年節尚無送禮規劃。</div>`;return;}
+  if(!rows.length){$('scheduleBody').innerHTML=`<div class="empty">🎉 ${y} ${f}：待配送都完成了！</div>`;return;}
+  const gcos=[...new Set(rows.map(r=>r.co))];
+  let html='';
+  gcos.forEach(c=>{
+    const cname=(companies[c]&&companies[c].name)||c;
+    const g=rows.filter(r=>r.co===c);
+    html+=`<div class="card yearblock">
+      <div class="yearhead"><h2>🏢 ${he(cname)}</h2><span class="pill">${y} ${f}</span><span class="pill">待送 ${g.filter(r=>r.status!=='已送達').length} / 共 ${g.length}</span></div>
+      <div style="overflow-x:auto"><table class="totaltable">
+        <thead><tr><th>送達</th><th>送禮對象</th><th>部門</th><th>公益</th><th>聖保羅</th><th>鬥茶王</th><th>狀態</th></tr></thead><tbody>`;
+    g.forEach(r=>{
+      const checked=r.status==='已送達'?'checked':'';
+      html+=`<tr>
+        <td class="c"><input type="checkbox" ${checked} onchange="toggleDeliver(${r.id}, this.checked)" style="width:18px;height:18px;cursor:pointer"></td>
+        <td><b>${he(r.target)}</b></td><td class="muted">${he(r.dept)}</td>
+        <td class="c">${r.a||0}</td><td class="c">${r.b||0}</td><td class="c">${r.c||0}</td>
+        <td class="c">${statusBadge(r.status)}</td></tr>`;
+    });
+    html+='</tbody></table></div></div>';
+  });
+  $('scheduleBody').innerHTML=html;
+}
+async function toggleDeliver(id, checked){
+  await handleStatus(id, checked ? '已送達' : '待備貨');
+  renderSchedule();
+}
 
 /* ---------- 年節統整報表 ---------- */
 function flowSum(year,fest,type){
