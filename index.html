@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>年節禮盒庫存系統</title>
 <style>
   :root{
@@ -14,6 +14,11 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5}
+  /* 跨平台（iOS Safari / Android Chrome）基礎 */
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+  *{-webkit-tap-highlight-color:rgba(0,0,0,0)}
+  button,select,input,textarea{touch-action:manipulation}
+  [style*="overflow-x:auto"]{-webkit-overflow-scrolling:touch}
   header{background:var(--card);border-bottom:1px solid var(--line);padding:14px 22px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}
   header h1{font-size:17px;font-weight:700}
   header .tag{font-size:11px;background:var(--brand-soft);color:var(--brand);padding:3px 8px;border-radius:20px;font-weight:600}
@@ -133,7 +138,7 @@
   .warn-box{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;padding:9px 11px;border-radius:8px;font-size:12px;margin-bottom:12px}
   .modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
   .modal-bg.show{display:flex}
-  .modal{background:#fff;border-radius:14px;width:100%;max-width:430px;padding:20px}
+  .modal{background:#fff;border-radius:14px;width:100%;max-width:430px;padding:20px;max-height:90vh;overflow:auto;-webkit-overflow-scrolling:touch}
   .modal h3{font-size:16px;margin-bottom:14px}
   .field{margin-bottom:12px}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -154,9 +159,18 @@
     header h1{font-size:15px}
     header .tag{display:none}
     .sync{margin-left:auto}
-    .nav{margin-left:0;width:100%;gap:6px;flex-wrap:wrap}
+    .nav{margin-left:0;width:100%;gap:6px;flex-wrap:wrap;order:3}
     .nav>button,.navdrop>button{white-space:nowrap;padding:8px 12px}
     .navmenu{min-width:170px}
+    /* iOS：對焦輸入框不自動放大（font<16px 會觸發）；加大觸控目標 */
+    input,select,textarea{font-size:16px}
+    .navmenu button{padding:11px 14px}
+    .nav>button,.navdrop>button{padding:9px 13px;font-size:14px}
+    .statussel,.numbtn{min-height:34px}
+    input[type=date]{min-height:38px}
+    /* 瀏海安全區 */
+    header{padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right))}
+    .sumwrap,.wrap{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
     /* 配送行事曆在手機縮小格高與字級 */
     .cal{table-layout:fixed}
     .cal th{padding:3px;font-size:11px}
