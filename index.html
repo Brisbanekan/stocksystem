@@ -444,10 +444,9 @@
 <div class="modal-bg" id="loginModal">
   <div class="modal" style="max-width:360px">
     <h3>🔒 請先登入</h3>
-    <p class="muted" id="loginHint" style="margin:-6px 0 12px">進入「送禮規劃」需要輸入用戶名稱</p>
-    <div class="field"><label>用戶名稱（預設 ROOT）</label>
-      <input id="loginName" list="userList" placeholder="ROOT" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()">
-      <datalist id="userList"></datalist></div>
+    <p class="muted" id="loginHint" style="margin:-6px 0 12px">進入「送禮規劃」需要選擇用戶</p>
+    <div class="field"><label>選擇用戶（預設 ROOT）</label>
+      <select id="loginSelect"></select></div>
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeModal('loginModal')">取消</button>
       <button class="btn-in" onclick="doLogin()">進入</button>
@@ -1059,14 +1058,12 @@ function enterSchedule(){ gateThen('schedule'); }
 function gateThen(page){
   if(currentUser){ switchPage(page); afterEnter(page); return; }
   pendingPage=page;
-  $('loginHint').textContent='進入「'+(page==='gift'?'送禮規劃':'送禮行程')+'」需要輸入用戶名稱';
-  if($('userList')) $('userList').innerHTML=users.map(u=>`<option value="${he(u)}">`).join('');
-  $('loginName').value='';
+  $('loginHint').textContent='進入「'+(page==='gift'?'送禮規劃':'送禮行程')+'」需要選擇用戶';
+  $('loginSelect').innerHTML=users.map(u=>`<option value="${he(u)}">${he(u)}</option>`).join('');
   $('loginModal').classList.add('show');
-  setTimeout(()=>$('loginName').focus(),50);
 }
 function doLogin(){
-  const name=$('loginName').value.trim();
+  const name=$('loginSelect').value.trim();
   if(!name){ toast('請輸入用戶名稱'); return; }
   const match=users.find(u=>u.toLowerCase()===name.toLowerCase());
   if(!match){ toast('查無此用戶名稱，請洽 ROOT 新增'); return; }
