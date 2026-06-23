@@ -292,18 +292,29 @@
   </div>
 </div>
 
-<!-- ============ 頁面：送禮總表 ============ -->
+<!-- ============ 頁面：送禮總表（查詢） ============ -->
 <div id="pageTotal" class="page">
   <div class="sumwrap">
-    <div id="totalTitle" style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">
-      <h2 style="font-size:20px">🎁 送禮總表</h2>
+    <div class="companybar">
+      <h2 style="font-size:20px;margin-right:auto">🎁 送禮查詢 · 誰還沒送到</h2>
       <span class="muted" id="totalStamp" style="font-size:12px"></span>
     </div>
+    <div class="filters" style="margin-bottom:14px">
+      <select id="gtYear" onchange="renderTotal()"></select>
+      <select id="gtFest" onchange="renderTotal()">
+        <option>過年</option><option>端午</option><option>中秋</option></select>
+      <select id="gtCo" onchange="renderTotal()"><option value="">全部公司</option></select>
+      <select id="gtStatus" onchange="renderTotal()">
+        <option value="pending">只看還沒送到</option>
+        <option value="all">全部</option>
+        <option value="done">只看已送達</option>
+      </select>
+    </div>
     <div class="kpis" style="grid-template-columns:repeat(4,1fr)">
-      <div class="kpi"><div class="n" id="tKpiTargets">0</div><div class="l">規劃對象</div></div>
-      <div class="kpi"><div class="n" id="tKpiPlan">0</div><div class="l">預計總盒數</div></div>
+      <div class="kpi"><div class="n" id="tKpiTargets">0</div><div class="l">此年節對象</div></div>
+      <div class="kpi"><div class="n flowout" id="tKpiPending">0</div><div class="l">還沒送到</div></div>
       <div class="kpi"><div class="n flowin" id="tKpiDone">0</div><div class="l">已送達</div></div>
-      <div class="kpi"><div class="n flowout" id="tKpiPending">0</div><div class="l">未送達</div></div>
+      <div class="kpi"><div class="n" id="tKpiPlan">0</div><div class="l">預計盒數</div></div>
     </div>
     <div id="totalBody"></div>
   </div>
@@ -927,47 +938,69 @@ function statusBadge(s){
   const map={'已送達':'b-in','已備貨':'b-prep','待備貨':'b-del'};
   return `<span class="badge ${map[s]||'b-del'}">${s||'待備貨'}</span>`;
 }
+var _totalInit=false;
 function renderTotal(){
   if(!document.getElementById('totalBody')) return;
-  const all=plan.slice();
-  $('tKpiTargets').textContent=all.length;
-  $('tKpiPlan').textContent=all.reduce((s,r)=>s+(r.plan||0),0).toLocaleString();
-  const done=all.filter(r=>r.status==='已送達').length;
-  $('tKpiDone').textContent=done;
-  $('tKpiPending').textContent=all.length-done;
+  // 年分下拉（依規劃既有年分）
+  const years=[...new Set(plan.map(r=>r.year))].sort((a,b)=>b-a);
+  if(!years.length) years.push(new Date().getFullYear());
+  const cy=$('gtYear').value;
+  $('gtYear').innerHTML=years.map(y=>`<option ${String(y)===cy?'selected':''}>${y}</option>`).join('');
+  if(!$('gtYear').value) $('gtYear').value=String(years[0]);
+  // 公司下拉
+  const cos=[...new Set(plan.map(r=>r.co))];
+  const cc=$('gtCo').value;
+  $('gtCo').innerHTML='<option value="">全部公司</option>'+cos.map(co=>`<option value="${co}" ${co===cc?'selected':''}>${he((companies[co]&&companies[co].name)||co)}</option>`).join('');
+
+  // 初次開啟：若預設年節沒資料，自動跳到最近一個有資料的年節
+  if(!_totalInit){
+    _totalInit=true;
+    const hasData=plan.some(r=>String(r.year)===String($('gtYear').value)&&r.fest===$('gtFest').value);
+    if(!hasData){
+      const combo=[...new Set(plan.map(r=>r.year+'|'+r.fest))].sort().reverse()[0];
+      if(combo){const pp=combo.split('|'); $('gtYear').value=pp[0]; $('gtFest').value=pp[1];}
+    }
+  }
+
+  const y=$('gtYear').value, f=$('gtFest').value, co=$('gtCo').value, st=$('gtStatus').value||'pending';
   const d=new Date(),p=n=>String(n).padStart(2,'0');
-  $('totalStamp').textContent='更新：'+d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+  $('totalStamp').textContent='更新 '+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
 
-  if(!all.length){$('totalBody').innerHTML='<div class="empty">尚無送禮規劃</div>';return;}
+  // 此年節範圍（不分狀態，給 KPI）
+  const scope=plan.filter(r=>String(r.year)===String(y) && r.fest===f && (!co||r.co===co));
+  const done=scope.filter(r=>r.status==='已送達');
+  const pending=scope.filter(r=>r.status!=='已送達');
+  $('tKpiTargets').textContent=scope.length;
+  $('tKpiPending').textContent=pending.length;
+  $('tKpiDone').textContent=done.length;
+  $('tKpiPlan').textContent=scope.reduce((s,r)=>s+(r.plan||0),0).toLocaleString();
 
-  const cos=[...new Set(all.map(r=>r.co))];
+  if(!scope.length){$('totalBody').innerHTML=`<div class="empty">${y} ${f}：此年節尚無送禮規劃。</div>`;return;}
+  let rows = st==='all'?scope : (st==='done'?done : pending);
+  if(!rows.length){
+    const lab = st==='done'?'已送達':'還沒送到';
+    $('totalBody').innerHTML=`<div class="empty">🎉 ${y} ${f}：沒有「${lab}」的對象。</div>`;return;
+  }
+  // 依公司分組
+  const gcos=[...new Set(rows.map(r=>r.co))];
   let html='';
-  cos.forEach(co=>{
-    const cname=(companies[co]&&companies[co].name)||co;
-    const crows=all.filter(r=>r.co===co);
-    const cdone=crows.filter(r=>r.status==='已送達').length;
+  gcos.forEach(c=>{
+    const cname=(companies[c]&&companies[c].name)||c;
+    const g=rows.filter(r=>r.co===c);
     html+=`<div class="card yearblock">
       <div class="yearhead"><h2>🏢 ${he(cname)}</h2>
-        <span class="pill">${crows.length} 位 · 預計 ${crows.reduce((s,r)=>s+(r.plan||0),0)} 盒</span>
-        <span class="pill"><span class="flowin">已送 ${cdone}</span> · <span class="flowout">未送 ${crows.length-cdone}</span></span>
-      </div>`;
-    const combos=[...new Set(crows.map(r=>r.year+'|'+r.fest))].sort().reverse();
-    combos.forEach(cb=>{
-      const parts=cb.split('|'); const yy=parts[0], ff=parts[1];
-      const seg=crows.filter(r=>String(r.year)===yy&&r.fest===ff);
-      html+=`<div style="margin:12px 0 6px"><b>${yy} <span class="fest">${ff}</span></b> <span class="muted" style="font-size:12px">${seg.length} 位 · 預計 ${seg.reduce((s,r)=>s+(r.plan||0),0)} 盒</span></div>`;
-      html+=`<div style="overflow-x:auto"><table class="totaltable">
+        <span class="pill">${y} ${f}</span>
+        <span class="pill">${g.length} 位 · ${g.reduce((s,r)=>s+(r.plan||0),0)} 盒</span></div>
+      <div style="overflow-x:auto"><table class="totaltable">
         <thead><tr><th>部門</th><th>送禮對象</th><th>預計</th><th>公益</th><th>聖保羅</th><th>鬥茶王</th><th>備註</th><th>狀態</th></tr></thead><tbody>`;
-      seg.forEach(r=>{
-        html+=`<tr>
-          <td>${he(r.dept)}</td><td><b>${he(r.target)}</b></td>
-          <td class="c qty">${r.plan||0}</td><td class="c">${r.a||0}</td><td class="c">${r.b||0}</td><td class="c">${r.c||0}</td>
-          <td class="muted">${he(r.note)}</td>
-          <td class="c">${statusBadge(r.status)}</td></tr>`;
-      });
-      html+='</tbody></table></div>';
+    g.forEach(r=>{
+      html+=`<tr>
+        <td>${he(r.dept)}</td><td><b>${he(r.target)}</b></td>
+        <td class="c qty">${r.plan||0}</td><td class="c">${r.a||0}</td><td class="c">${r.b||0}</td><td class="c">${r.c||0}</td>
+        <td class="muted">${he(r.note)}</td>
+        <td class="c">${statusBadge(r.status)}</td></tr>`;
     });
-    html+='</div>';
+    html+='</tbody></table></div></div>';
   });
   $('totalBody').innerHTML=html;
 }
