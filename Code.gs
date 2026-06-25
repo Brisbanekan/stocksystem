@@ -21,6 +21,7 @@ const SHEET_ITEMS = '禮盒';
 const SHEET_TX    = '異動';
 const SHEET_PLAN  = '送禮規劃';
 const SHEET_CO    = '公司';
+const SHEET_HIST  = '規劃歷史';
 
 const CATS  = { A: '公益', B: '聖保羅', C: '鬥茶王' };
 const FESTS = ['過年', '端午', '中秋'];
@@ -74,6 +75,8 @@ function handleApi(req) {
       case 'deleteItem': return jsonOut(apiDeleteItem(req));
       case 'removeTxs':  return jsonOut(apiRemoveTxs(req));
       case 'savePlan':   return jsonOut(apiSavePlan(req));
+      case 'listVersions': return jsonOut(apiListVersions());
+      case 'loadVersion':  return jsonOut(apiLoadVersion(req));
       default:           return jsonOut({ ok: false, error: 'unknown action: ' + req.action });
     }
   } catch (err) {
@@ -173,7 +176,52 @@ function apiSavePlan(req) {
   if (crows.length) cs.getRange(2, 1, crows.length, 2).setValues(crows);
   cs.setFrozenRows(1);
 
+  // 版本快照（每次儲存留一版；與上一版相同則略過）
+  snapshotPlan(req.plan || [], req.companies || {}, req.editor || '');
+
   return { ok: true };
+}
+
+/* ======================================================
+ *  規劃版本紀錄（每次儲存留版本；可查閱／還原）
+ * ====================================================== */
+function snapshotPlan(planArr, companies, editor) {
+  var sh = sheet(SHEET_HIST);
+  if (!sh) sh = ss().insertSheet(SHEET_HIST);
+  if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, 5).setValues([['版本時間', '編輯者', '對象數', '規劃JSON', '公司JSON']]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  var planJSON = JSON.stringify(planArr || []);
+  var last = sh.getLastRow();
+  if (last >= 2 && sh.getRange(last, 4).getValue() === planJSON) return; // 無變化不留版本
+  var ts = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
+  sh.appendRow([ts, editor || '', (planArr || []).length, planJSON, JSON.stringify(companies || {})]);
+}
+
+function apiListVersions() {
+  var sh = sheet(SHEET_HIST);
+  if (!sh) return { ok: true, versions: [] };
+  var data = sh.getDataRange().getValues();
+  data.shift();
+  var out = [];
+  for (var i = 0; i < data.length; i++) {
+    if (data[i][0] !== '') out.push({ row: i + 2, ts: data[i][0], editor: data[i][1], count: data[i][2] });
+  }
+  out.reverse();
+  return { ok: true, versions: out.slice(0, 300) };
+}
+
+function apiLoadVersion(req) {
+  var sh = sheet(SHEET_HIST);
+  if (!sh) return { ok: false, error: 'no history' };
+  var row = Number(req.row);
+  if (!row || row < 2 || row > sh.getLastRow()) return { ok: false, error: 'bad version' };
+  var v = sh.getRange(row, 1, 1, 5).getValues()[0];
+  var plan = [], companies = {};
+  try { plan = JSON.parse(v[3] || '[]'); } catch (e) {}
+  try { companies = JSON.parse(v[4] || '{}'); } catch (e) {}
+  return { ok: true, ts: v[0], editor: v[1], plan: plan, companies: companies };
 }
 
 /* ======================================================
@@ -502,6 +550,14 @@ function initSheets() {
     shCo.getRange(1, 1, 1, 2).setValues([['key', '名稱']]).setFontWeight('bold');
     shCo.getRange(2, 1, 2, 2).setValues([['c1', '公司一'], ['c2', '公司二']]);
     shCo.setFrozenRows(1);
+  }
+
+  // 規劃歷史：版本快照
+  var shHist = book.getSheetByName(SHEET_HIST);
+  if (!shHist) shHist = book.insertSheet(SHEET_HIST);
+  if (shHist.getLastRow() === 0) {
+    shHist.getRange(1, 1, 1, 5).setValues([['版本時間', '編輯者', '對象數', '規劃JSON', '公司JSON']]).setFontWeight('bold');
+    shHist.setFrozenRows(1);
   }
 
   SpreadsheetApp.flush();

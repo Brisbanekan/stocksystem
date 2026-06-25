@@ -335,6 +335,7 @@
         <select id="gFest" onchange="renderGiftPlan()">
           <option>過年</option><option>端午</option><option>中秋</option></select>
         <button class="btn-ghost" onclick="openCopyModal()">⧉ 複製清單</button>
+        <button class="btn-ghost" onclick="openHistModal()">🕘 版本紀錄</button>
         <button class="btn-add" onclick="openGiftModal()">＋ 新增送禮對象</button>
       </div>
     </div>
@@ -421,6 +422,28 @@
     </div>
     <div id="calBody"></div>
     <div id="unscheduledBody" style="margin-top:16px"></div>
+  </div>
+</div>
+
+<!-- 版本紀錄 modal -->
+<div class="modal-bg" id="histModal">
+  <div class="modal" style="max-width:580px">
+    <h3>🕘 規劃版本紀錄</h3>
+    <p class="muted" style="margin:-6px 0 10px;font-size:12px">每次儲存會留一個版本。可「預覽」過去某時的規劃，或「還原」把目前規劃一鍵覆蓋成該版本（還原前的現況本身也是一個版本，可再還原回來）。</p>
+    <div id="histList" style="max-height:52vh;overflow:auto"></div>
+    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal('histModal')">關閉</button></div>
+  </div>
+</div>
+
+<!-- 版本預覽 modal -->
+<div class="modal-bg" id="histPreviewModal">
+  <div class="modal" style="max-width:640px">
+    <h3 id="histPvTitle">版本預覽</h3>
+    <div id="histPvBody" style="max-height:50vh;overflow:auto"></div>
+    <div class="modal-actions" style="justify-content:space-between">
+      <button class="btn-in" id="histPvRestore">↩ 還原成此版本</button>
+      <button class="btn-ghost" onclick="closeModal('histPreviewModal')">關閉</button>
+    </div>
   </div>
 </div>
 
@@ -678,7 +701,7 @@ function savePlanSoon(){
 async function savePlanNow(){
   if(!ONLINE) return;
   clearTimeout(_saveTimer);
-  try{ await api('savePlan',{plan:serializePlan(), companies:companies}); setSync('ok','已同步'); }
+  try{ await api('savePlan',{plan:serializePlan(), companies:companies, editor:currentUser}); setSync('ok','已同步'); }
   catch(err){ console.error(err); setSync('err','儲存失敗：'+err.message); }
 }
 
@@ -982,6 +1005,66 @@ async function handleStatus(id, newStatus){
 }
 
 /* 複製清單：把某個年節的送禮對象沿用到目前年節 */
+/* ====================== 規劃版本紀錄（查閱 + 一鍵還原） ====================== */
+async function openHistModal(){
+  if(!ONLINE){ toast('展示模式無版本紀錄'); return; }
+  $('histList').innerHTML='<div class="muted" style="padding:10px">載入中…</div>';
+  $('histModal').classList.add('show');
+  try{
+    const d=await api('listVersions');
+    const vs=d.versions||[];
+    if(!vs.length){ $('histList').innerHTML='<div class="empty">目前還沒有版本紀錄（儲存一次規劃後就會開始累積）。</div>'; return; }
+    $('histList').innerHTML='<div style="overflow-x:auto"><table class="totaltable"><thead><tr><th>版本時間</th><th>編輯者</th><th>對象數</th><th>操作</th></tr></thead><tbody>'+
+      vs.map(v=>`<tr>
+        <td>${he(v.ts)}</td><td class="muted">${he(v.editor||'—')}</td><td class="c">${v.count||0}</td>
+        <td style="white-space:nowrap"><button class="btn-ghost" style="padding:5px 10px" onclick="previewVersion(${v.row})">預覽</button>
+            <button class="btn-in" style="padding:5px 10px" onclick="restoreVersion(${v.row}, '${he(v.ts)}')">還原</button></td>
+      </tr>`).join('')+'</tbody></table></div>';
+  }catch(err){ $('histList').innerHTML='<div class="warn-box">載入失敗：'+he(err.message)+'</div>'; }
+}
+async function previewVersion(row){
+  try{
+    const d=await api('loadVersion',{row});
+    $('histPvTitle').textContent='版本預覽 · '+d.ts;
+    $('histPvBody').innerHTML=renderVersionTable(d.plan||[], d.companies||{});
+    $('histPvRestore').setAttribute('onclick', `restoreVersion(${row}, '${he(d.ts)}')`);
+    $('histPreviewModal').classList.add('show');
+  }catch(err){ toast('預覽失敗：'+err.message); }
+}
+function renderVersionTable(planArr, comps){
+  if(!planArr.length) return '<div class="empty">此版本沒有規劃資料。</div>';
+  const cos=[...new Set(planArr.map(r=>r.co))];
+  let html='';
+  cos.forEach(co=>{
+    const cname=(comps[co]&&comps[co].name)||co;
+    const crows=planArr.filter(r=>r.co===co);
+    const combos=[...new Set(crows.map(r=>r.year+'|'+r.fest))].sort().reverse();
+    html+=`<div style="font-weight:700;margin:10px 0 4px">🏢 ${he(cname)}</div>`;
+    combos.forEach(cb=>{
+      const pp=cb.split('|'); const yy=pp[0], ff=pp[1];
+      const seg=crows.filter(r=>String(r.year)===yy&&r.fest===ff);
+      html+=`<div class="muted" style="font-size:12px;margin:6px 0 2px">${yy} ${ff}</div>`;
+      html+='<div style="overflow-x:auto"><table class="totaltable"><thead><tr><th>部門</th><th>對象</th><th>預計</th><th>公益</th><th>聖保羅</th><th>鬥茶王</th><th>狀態</th></tr></thead><tbody>';
+      seg.forEach(r=>{ html+=`<tr><td>${he(r.dept)}</td><td><b>${he(r.target)}</b></td><td class="c">${r.plan||0}</td><td class="c">${r.a||0}</td><td class="c">${r.b||0}</td><td class="c">${r.c||0}</td><td class="c">${statusBadge(r.status)}</td></tr>`; });
+      html+='</tbody></table></div>';
+    });
+  });
+  return html;
+}
+async function restoreVersion(row, ts){
+  if(!confirm('確定要把「目前的送禮規劃」還原成 '+ts+' 的版本嗎？\n（目前的現況也已是一個版本，之後可再還原回來）')) return;
+  try{
+    const d=await api('loadVersion',{row});
+    plan=hydratePlan(d.plan||[]);
+    if(d.companies && Object.keys(d.companies).length) companies=d.companies;
+    pseq=plan.reduce((m,r)=>Math.max(m,Number(r.id)||0),0)+1;
+    await savePlanNow();
+    closeModal('histPreviewModal'); closeModal('histModal');
+    renderAll(); switchCompany(curCompany);
+    toast('已還原至 '+ts);
+  }catch(err){ toast('還原失敗：'+err.message); }
+}
+
 function openCopyModal(){
   const y=$('gYear').value, f=$('gFest').value;
   const cur=y+'|'+f;
