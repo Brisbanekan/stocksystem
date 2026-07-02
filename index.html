@@ -190,9 +190,20 @@
     .ctx select,.ctx .btn-ghost{flex:1 1 auto}
     .modal{padding:16px}
   }
+
+  /* ====================== 手機畫面模擬 ====================== */
+  body.sim-mobile{background:#2b2f38;display:flex;justify-content:center;align-items:flex-start;padding:28px 0;min-height:100vh}
+  body.sim-mobile #appRoot{width:390px;max-width:390px;height:844px;max-height:844px;overflow-y:auto;overflow-x:hidden;
+    border:10px solid #14181f;border-radius:38px;box-shadow:0 24px 60px rgba(0,0,0,.55);background:var(--bg);position:relative}
+  body.sim-mobile #appRoot header{position:sticky}
+  #btnMobileSim.on{background:var(--brand);color:#fff}
+  .planSaveBtn{font-weight:700}
+  .planSaveBtn.dirty{background:var(--brand);color:#fff;box-shadow:0 2px 8px rgba(184,134,11,.35)}
+  .planSaveBtn:disabled{opacity:.55;cursor:default}
 </style>
 </head>
 <body>
+<div id="appRoot">
 <header>
   <h1>🎁 年節禮盒庫存系統</h1>
   <nav class="nav">
@@ -214,6 +225,7 @@
       </div>
     </div>
   </nav>
+  <button class="btn-ghost" id="btnMobileSim" onclick="toggleMobileSim()" title="切換手機畫面模擬" style="margin-left:8px">📱 手機模擬</button>
   <div class="sync off" id="sync">
     <span class="dot"></span><span id="syncText">未連線</span>
     <button onclick="boot()" title="重新從試算表載入">🔄 重新整理</button>
@@ -318,11 +330,17 @@
     <div id="userBar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:13px">
       <span class="pill" style="background:var(--brand-soft);color:var(--brand)">👤 編輯者：<b id="curUserName">—</b></span>
       <button class="btn-ghost" style="padding:5px 10px" onclick="logout()">登出</button>
-      <span id="rootTools" style="display:none;align-items:center;gap:6px">
+      <span id="rootTools" style="display:none;align-items:center;gap:6px;flex-wrap:wrap">
         <span class="muted">·</span>
         <input id="newUserName" placeholder="新增用戶名稱" style="padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-family:inherit" onkeydown="if(event.key==='Enter')addUser()">
+        <select id="newUserPerm" style="padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-family:inherit">
+          <option value="edit">可編輯</option>
+          <option value="view">唯讀</option>
+        </select>
         <button class="btn-ghost" style="padding:5px 10px" onclick="addUser()">＋ 新增用戶</button>
         <span class="muted" id="userListShow" style="font-size:12px"></span>
+        <span class="muted" style="font-size:12px">· 權限：</span>
+        <span id="userPermList" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></span>
       </span>
     </div>
     <div class="companybar">
@@ -334,20 +352,19 @@
         <select id="gYear" onchange="renderGiftPlan()"></select>
         <select id="gFest" onchange="renderGiftPlan()">
           <option>過年</option><option>端午</option><option>中秋</option></select>
-        <button class="btn-ghost" onclick="openCopyModal()">⧉ 複製清單</button>
+        <button class="btn-ghost" id="btnCopyList" onclick="openCopyModal()">⧉ 複製清單</button>
         <button class="btn-ghost" onclick="openHistModal()">🕘 版本紀錄</button>
-        <button class="btn-add" onclick="openGiftModal()">＋ 新增送禮對象</button>
+        <button class="btn-add" id="btnAddGift" onclick="openGiftModal()">＋ 新增送禮對象</button>
+        <button class="btn-ghost planSaveBtn" onclick="savePlanClick()">💾 已儲存</button>
       </div>
     </div>
 
-    <div class="kpis" style="grid-template-columns:repeat(5,1fr)">
+    <div class="kpis" style="grid-template-columns:repeat(2,1fr)">
       <div class="kpi"><div class="n" id="gKpiTargets">0</div><div class="l">送禮對象</div></div>
       <div class="kpi"><div class="n" id="gKpiPlan">0</div><div class="l">預計總數</div></div>
-      <div class="kpi"><div class="n colpub" id="gKpiA">0</div><div class="l">公益</div></div>
-      <div class="kpi"><div class="n colsheng" id="gKpiB">0</div><div class="l">聖保羅</div></div>
-      <div class="kpi"><div class="n coldou" id="gKpiC">0</div><div class="l">鬥茶王</div></div>
     </div>
-    <p class="legend">提示：「已分配」=公益+聖保羅+鬥茶王。當已分配 ≠ 預計總數時，該列左側會亮起橘色，方便追蹤還沒決定送哪種禮盒的對象。狀態改「已送達」會自動扣庫存並寫入出貨明細。</p>
+    <div id="gCatKpis" style="display:flex;gap:8px;flex-wrap:wrap;margin:-6px 0 14px"></div>
+    <p class="legend">提示：「預計」＝各禮盒類別自動加總，不能手動編輯，改各類別的數量會自動連動。每個類別欄位可各自按「🚚 送達」單獨扣庫存、或按「✅」復原加回庫存，不必整列一次全送；已送達的類別會鎖定數量、無法再編輯。可在「＋ 新增送禮對象」視窗自訂新的禮盒類別，新增後會立即顯示在下方表格欄位中。一般編輯（改數量/備註/新增/刪除送禮對象）只會先存在本機，按右上「💾 儲存」才會真正寫回並在版本紀錄新增一筆版本；「狀態」下拉選「已送達」是快速鍵，會一次送達該列尚未送達的所有類別（並立即扣庫存、自動存檔），選回其他狀態則會詢問是否要復原所有已送達的類別。</p>
 
     <div id="giftBody"></div>
   </div>
@@ -406,6 +423,7 @@
   <div class="sumwrap">
     <div class="companybar">
       <h2 style="font-size:20px;margin-right:auto">🗓 送禮行程 · 配送行事曆</h2>
+      <button class="btn-ghost planSaveBtn" onclick="savePlanClick()">💾 已儲存</button>
       <span class="muted" id="schedStamp" style="font-size:12px"></span>
     </div>
     <div class="filters" style="margin-bottom:12px">
@@ -424,6 +442,7 @@
     <div id="unscheduledBody" style="margin-top:16px"></div>
   </div>
 </div>
+</div><!-- /appRoot -->
 
 <!-- 版本紀錄 modal -->
 <div class="modal-bg" id="histModal">
@@ -468,10 +487,11 @@
   <div class="modal" style="max-width:360px">
     <h3>🔒 請先登入</h3>
     <p class="muted" id="loginHint" style="margin:-6px 0 12px">進入「送禮規劃」需要選擇用戶</p>
-    <div class="field"><label>選擇用戶（預設 ROOT）</label>
-      <select id="loginSelect"></select></div>
+    <div class="field"><label>輸入用戶名稱（ROOT 或已建立的用戶，需完整輸入）</label>
+      <input id="loginSelect" placeholder="請輸入完整帳號名稱" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
     <div class="modal-actions">
-      <button class="btn-ghost" onclick="closeModal('loginModal')">取消</button>
+      <button class="btn-ghost" id="loginCancelBtn" onclick="cancelLogin()">取消</button>
       <button class="btn-in" onclick="doLogin()">進入</button>
     </div>
   </div>
@@ -539,11 +559,18 @@
     <div class="field"><label>送禮對象</label><input id="giTarget" placeholder="例如 王村長 / 員工"></div>
     <div class="row2">
       <div class="field"><label>禮盒類別</label>
-        <select id="giCat">
+        <select id="giCat" onchange="onGiCatChange()">
           <option value="">未分配（之後再決定）</option>
-          <option value="A">公益</option><option value="B">聖保羅</option><option value="C">鬥茶王</option>
         </select></div>
       <div class="field"><label>數量</label><input id="giQty" type="number" min="0" value="1"></div>
+    </div>
+    <div class="field" id="giNewCatRow" style="display:none;background:var(--brand-soft);border-radius:8px;padding:10px">
+      <label>新類別名稱</label>
+      <input id="giNewCatName" placeholder="例如：特別禮盒" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmNewCat();}">
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button type="button" class="btn-ghost" onclick="cancelNewCat()">取消</button>
+        <button type="button" class="btn-in" onclick="confirmNewCat()">確認新增這個類別</button>
+      </div>
     </div>
     <div class="field"><label>備註</label><input id="giNote" placeholder="選填"></div>
     <div class="modal-actions">
@@ -599,7 +626,32 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbxyJjrvZ3A1Z3DmNOychIw-
 const ONLINE = /^https:\/\//.test(API_URL);
 
 /* ---------- 分類定義 ---------- */
-const CATS={A:'公益',B:'聖保羅',C:'鬥茶王'};
+const CATS={A:'公益',B:'聖保羅',C:'鬥茶王'}; // 全站固定的內建類別
+/* 自訂類別：存在 companies[co].categories = {key:name}，各公司各自管理，
+ * 但因庫存品項不分公司，庫存管理／扣庫存比對時要看全系統所有類別（見 allCats） */
+function coCats(co){
+  const extra=(companies[co] && companies[co].categories) || {};
+  return Object.assign({}, CATS, extra);
+}
+function catName(key){
+  if(CATS[key]) return CATS[key];
+  for(const co in companies){ const ex=(companies[co]&&companies[co].categories)||{}; if(ex[key]) return ex[key]; }
+  return key;
+}
+function allCats(){
+  const m=Object.assign({},CATS);
+  Object.keys(companies||{}).forEach(co=>{ const ex=(companies[co]&&companies[co].categories)||{}; Object.assign(m, ex); });
+  return m;
+}
+function newCatKey(){ return 'cat_'+Date.now().toString(36)+Math.floor(Math.random()*1296).toString(36); }
+const CAT_PALETTE=['#059669','#d97706','#be185d','#4338ca','#0f766e','#65a30d','#c2410c','#0891b2'];
+function catColor(key){
+  if(key==='A') return '#0ea5e9';
+  if(key==='B') return '#7c3aed';
+  if(key==='C') return '#e11d48';
+  let h=0; const s=String(key); for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0;
+  return CAT_PALETTE[h % CAT_PALETTE.length];
+}
 
 /* ---------- 資料（展示模式的後備範例；連線模式會被試算表覆蓋） ---------- */
 let seq=1;
@@ -620,6 +672,15 @@ function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show')
 function label(i){return `${i.name}（${i.year}${i.fest}）`;}
 function nowStamp(){const d=new Date();const p=n=>String(n).padStart(2,'0');return `${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;}
 function newLocalId(){return 't'+Date.now().toString(36)+Math.floor(Math.random()*1296).toString(36);}
+
+/* ---------- 手機畫面模擬 ---------- */
+function toggleMobileSim(force){
+  const on = (typeof force==='boolean') ? force : !document.body.classList.contains('sim-mobile');
+  document.body.classList.toggle('sim-mobile', on);
+  if($('btnMobileSim')) $('btnMobileSim').classList.toggle('on', on);
+  try{ localStorage.setItem('simMobile', on?'1':''); }catch(e){}
+  if(typeof force!=='boolean') toast(on?'已切換為手機模擬畫面':'已還原桌面畫面');
+}
 
 /* ---------- 同步狀態列 ---------- */
 function setSync(state, text){
@@ -642,6 +703,7 @@ async function api(action, payload){
 async function boot(){
   const _p=new URLSearchParams(location.search);
   if(_p.get('shot')==='1') document.body.classList.add('shot');
+  try{ if(localStorage.getItem('simMobile')==='1') toggleMobileSim(true); }catch(e){}
   if(ONLINE){
     setSync('busy','載入中…');
     try{
@@ -667,40 +729,96 @@ async function boot(){
   renderPlan();
   if(_p.get('view')==='total') switchPage('total');
   initAuth();
+  updateSaveUI();
 }
 
 function hydratePlan(rows){
   let dmap={}; try{ dmap=JSON.parse(localStorage.getItem('giftDates'))||{}; }catch(e){}
-  return rows.map(r=>({
-    id:Number(r.id), co:r.co, year:Number(r.year), fest:r.fest, dept:r.dept, target:r.target,
-    plan:Number(r.plan)||0, a:Number(r.a)||0, b:Number(r.b)||0, c:Number(r.c)||0,
-    note:r.note||'', signer:r.signer||'', status:r.status||'待備貨',
-    shipped: (r.shipped===true||r.shipped==='TRUE'||r.shipped==='true'||r.shipped===1),
-    txRefIds: r.txRefs ? String(r.txRefs).split(',').filter(Boolean) : [],
-    deliveredIds: parseJSONsafe(r.delivered),
-    date: (r.date || dmap[Number(r.id)] || dmap[r.id] || '')
-  }));
+  return rows.map(r=>{
+    // cats：優先讀完整的 cats JSON（含自訂類別）；沒有的話（舊版資料）退回組 A/B/C
+    let cats=null;
+    if(r.cats){ try{ cats=JSON.parse(r.cats); }catch(e){ cats=null; } }
+    if(!cats || typeof cats!=='object') cats={A:Number(r.a)||0, B:Number(r.b)||0, C:Number(r.c)||0};
+
+    // deliveredCats：每個類別各自的送達紀錄 {catKey:{itemId,cnt,txId}}，只有存在紀錄的類別才算已送達
+    let deliveredCats=null;
+    if(r.deliveredCats){ try{ deliveredCats=JSON.parse(r.deliveredCats); }catch(e){ deliveredCats=null; } }
+    if(!deliveredCats || typeof deliveredCats!=='object'){
+      // 舊版資料遷移：早期版本是整列一起送達／復原，deliveredIds 與 txRefs 是同順序的兩個陣列，
+      // 用品項的 cat 欄位把每筆兌回它屬於哪個類別。
+      deliveredCats={};
+      const legacyDelivered=parseJSONsafe(r.delivered);
+      const legacyTxRefs=r.txRefs ? String(r.txRefs).split(',').filter(Boolean) : [];
+      legacyDelivered.forEach((d,idx)=>{
+        const it=items.find(i=>String(i.id)===String(d.id));
+        if(it) deliveredCats[it.cat]={itemId:d.id, cnt:Number(d.cnt)||0, txId:legacyTxRefs[idx]||null};
+      });
+    }
+
+    const o={
+      id:Number(r.id), co:r.co, year:Number(r.year), fest:r.fest, dept:r.dept, target:r.target,
+      plan:Number(r.plan)||0, cats:cats, deliveredCats:deliveredCats,
+      note:r.note||'', signer:r.signer||'', status:r.status||'待備貨',
+      shipped:false,
+      date: (r.date || dmap[Number(r.id)] || dmap[r.id] || '')
+    };
+    syncPlan(o); // 預計＝各類別加總；shipped＝是否所有已分配類別都已送達，確保連動一致
+    return o;
+  });
 }
 function parseJSONsafe(v){ try{ return v? JSON.parse(v):[]; }catch(e){ return []; } }
+/* 從（後端原始格式的）一列規劃資料取出 cats 物件；優先用 cats JSON，沒有就退回組 A/B/C */
+function parseCatsField(r){
+  if(r.cats){ try{ const c=JSON.parse(r.cats); if(c && typeof c==='object') return c; }catch(e){} }
+  return {A:Number(r.a)||0, B:Number(r.b)||0, C:Number(r.c)||0};
+}
+function sortCatKeys(keys){
+  const order={A:0,B:1,C:2};
+  return keys.slice().sort((a,b)=>{ const oa=(order[a]!==undefined?order[a]:9), ob=(order[b]!==undefined?order[b]:9); return oa-ob || String(a).localeCompare(String(b)); });
+}
 
-/* 送禮規劃資料 → 試算表用的序列化格式 */
+/* 送禮規劃資料 → 試算表用的序列化格式（a/b/c、delivered/txRefs 保留給人工在試算表閱讀，
+ * cats／deliveredCats 才是完整資料，含自訂類別與逐類別送達紀錄） */
 function serializePlan(){
-  return plan.map(r=>({
-    id:r.id, co:r.co, year:r.year, fest:r.fest, dept:r.dept, target:r.target,
-    plan:r.plan, a:r.a, b:r.b, c:r.c, note:r.note||'', signer:r.signer||'', status:r.status,
-    shipped:!!r.shipped, txRefs:(r.txRefIds||[]).join(','), delivered:JSON.stringify(r.deliveredIds||[]), date:r.date||''
-  }));
+  return plan.map(r=>{
+    const cats=r.cats||{};
+    const dc=r.deliveredCats||{};
+    const deliveredArr=Object.values(dc).map(d=>({id:d.itemId, cnt:d.cnt}));
+    const txRefsArr=Object.values(dc).map(d=>d.txId).filter(Boolean);
+    return {
+      id:r.id, co:r.co, year:r.year, fest:r.fest, dept:r.dept, target:r.target,
+      plan:r.plan, a:cats.A||0, b:cats.B||0, c:cats.C||0, cats:JSON.stringify(cats),
+      note:r.note||'', signer:r.signer||'', status:r.status,
+      shipped:!!r.shipped, txRefs:txRefsArr.join(','), delivered:JSON.stringify(deliveredArr),
+      date:r.date||'', deliveredCats:JSON.stringify(dc)
+    };
+  });
 }
-let _saveTimer=null;
-function savePlanSoon(){
-  if(!ONLINE) return;
-  setSync('busy','儲存中…');
-  clearTimeout(_saveTimer);
-  _saveTimer=setTimeout(savePlanNow,700);
+/* ---------- 未儲存變更追蹤：一般編輯只標記「未儲存」，按下儲存鍵才真正寫回並產生一筆版本 ---------- */
+let planDirty=false;
+function markDirty(){ planDirty=true; updateSaveUI(); }
+function updateSaveUI(){
+  document.querySelectorAll('.planSaveBtn').forEach(b=>{
+    const can=canEdit();
+    b.disabled = !planDirty || !can;
+    b.textContent = planDirty ? '💾 儲存變更 ●' : '💾 已儲存';
+    b.classList.toggle('dirty', planDirty);
+    b.title = !can ? '目前為唯讀權限' : (planDirty ? '按下儲存才會寫回並新增一筆版本紀錄' : '目前沒有未儲存的變更');
+  });
 }
+async function savePlanClick(){
+  if(!canEdit()){ toast('目前為唯讀權限，無法儲存'); return; }
+  if(!planDirty){ toast('目前沒有未儲存的變更'); return; }
+  if(!ONLINE){ toast('展示模式無法儲存到雲端'); return; }
+  await savePlanNow();
+  planDirty=false; updateSaveUI();
+  toast('已儲存，並新增一筆版本紀錄');
+}
+window.addEventListener('beforeunload', function(e){
+  if(planDirty){ e.preventDefault(); e.returnValue=''; }
+});
 async function savePlanNow(){
   if(!ONLINE) return;
-  clearTimeout(_saveTimer);
   try{ await api('savePlan',{plan:serializePlan(), companies:companies, editor:currentUser}); setSync('ok','已同步'); }
   catch(err){ console.error(err); setSync('err','儲存失敗：'+err.message); }
 }
@@ -726,6 +844,13 @@ function renderYearFilter(){
   const years=[...new Set(items.map(i=>i.year))].sort((a,b)=>b-a);
   const cur=$('fYear').value;
   $('fYear').innerHTML='<option value="">全部年分</option>'+years.map(y=>`<option ${String(y)===cur?'selected':''}>${y}</option>`).join('');
+}
+/* 庫存管理的分類篩選／新增禮盒分類下拉：彙整全系統（含各公司自訂）類別 */
+function refreshCatFilterOptions(){
+  const sel=$('fCat'); if(!sel) return;
+  const cur=sel.value;
+  const cats=allCats();
+  sel.innerHTML='<option value="">全部分類</option>'+Object.keys(cats).map(k=>`<option value="${he(k)}" ${k===cur?'selected':''}>${he(cats[k])}</option>`).join('');
 }
 function renderKpis(){
   $('kpiItems').textContent = items.length;
@@ -756,8 +881,9 @@ function itemCompare(a, b){
   return String(a.name).localeCompare(String(b.name),'zh-Hant');
 }
 function renderItems(){
+  refreshCatFilterOptions();
   const rows=filtered().sort(itemCompare).map(i=>`<tr>
-      <td><span class="cat cat${i.cat}">${i.cat} ${CATS[i.cat]}</span></td>
+      <td><span class="cat" style="background:${catColor(i.cat)}">${he(catName(i.cat))}</span></td>
       <td><b>${i.name}</b></td>
       <td class="muted">${i.spec||''}</td>
       <td>${i.year}</td>
@@ -838,14 +964,13 @@ let companies={c1:{name:'公司一'}, c2:{name:'公司二'}};
 let curCompany='c1';
 let pseq=1;
 let plan=[
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'員工',     target:'員工',   plan:10, a:10, b:0, c:0, note:'', signer:'同右', status:'已備貨', shipped:false, txRefIds:[], deliveredIds:[]},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'員工',     target:'許雅君', plan:1,  a:1,  b:0, c:0, note:'', signer:'', status:'待備貨', shipped:false, txRefIds:[], deliveredIds:[]},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'業務部',   target:'呂文煜-水上鄉大崙村現任村長', plan:1, a:1, b:0, c:0, note:'關懷社區事務、維持良好關係', signer:'', status:'待備貨', shipped:false, txRefIds:[], deliveredIds:[]},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'公司',     target:'股東',   plan:4,  a:0,  b:0, c:0, note:'緒4、凱4', signer:'', status:'待備貨', shipped:false, txRefIds:[], deliveredIds:[]},
-  {id:pseq++, co:'c2', year:2026, fest:'過年', dept:'管理部',   target:'全體同仁', plan:8, a:8, b:0, c:0, note:'', signer:'', status:'待備貨', shipped:false, txRefIds:[], deliveredIds:[]},
+  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'員工',     target:'員工',   plan:10, cats:{A:10,B:0,C:0}, deliveredCats:{}, note:'', signer:'同右', status:'已備貨', shipped:false},
+  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'員工',     target:'許雅君', plan:1,  cats:{A:1,B:0,C:0}, deliveredCats:{}, note:'', signer:'', status:'待備貨', shipped:false},
+  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'業務部',   target:'呂文煜-水上鄉大崙村現任村長', plan:1, cats:{A:1,B:0,C:0}, deliveredCats:{}, note:'關懷社區事務、維持良好關係', signer:'', status:'待備貨', shipped:false},
+  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'公司',     target:'股東',   plan:4,  cats:{A:0,B:0,C:0}, deliveredCats:{}, note:'緒4、凱4', signer:'', status:'待備貨', shipped:false},
+  {id:pseq++, co:'c2', year:2026, fest:'過年', dept:'管理部',   target:'全體同仁', plan:8, cats:{A:8,B:0,C:0}, deliveredCats:{}, note:'', signer:'', status:'待備貨', shipped:false},
 ];
 const STATUS=['待備貨','已備貨','已送達'];
-const CATFIELD={A:'a', B:'b', C:'c'};
 
 function switchCompany(co){
   curCompany=co;
@@ -855,9 +980,10 @@ function switchCompany(co){
   renderGiftPlan();
 }
 function renameCompany(v){
+  if(!canEdit()){ toast('目前為唯讀權限，無法修改公司名稱'); switchCompany(curCompany); return; }
   companies[curCompany].name=(v||'').trim()||companies[curCompany].name;
   $('ctab-'+curCompany).textContent=companies[curCompany].name;
-  savePlanSoon();
+  markDirty();
 }
 
 function gFiltered(){
@@ -870,51 +996,95 @@ function renderGiftYearFilter(){
   const cur=$('gYear').value;
   $('gYear').innerHTML=years.map(y=>`<option ${String(y)===cur?'selected':''}>${y}</option>`).join('');
 }
-function alloc(r){return (r.a||0)+(r.b||0)+(r.c||0);}
+function catSum(r){ const c=r.cats||{}; return Object.keys(c).reduce((s,k)=>s+(Number(c[k])||0),0); }
+/* 已分配＝實際已送達（已扣庫存）的數量加總，逐類別累計；未送達的類別不計入 */
+function alloc(r){
+  const dc=r.deliveredCats||{};
+  return Object.values(dc).reduce((s,d)=>s+(Number(d.cnt)||0),0);
+}
+function activeCatKeys(r){ const c=r.cats||{}; return Object.keys(c).filter(k=>(Number(c[k])||0)>0); }
+function isCatDelivered(r,key){ return !!(r.deliveredCats && r.deliveredCats[key]); }
+function deliveredCount(r){ return activeCatKeys(r).filter(k=>isCatDelivered(r,k)).length; }
+function activeCatCount(r){ return activeCatKeys(r).length; }
+function isFullyShipped(r){ const n=activeCatCount(r); return n>0 && deliveredCount(r)===n; }
+function syncPlan(r){
+  if(!r.deliveredCats) r.deliveredCats={};
+  r.plan = catSum(r);           // 預計＝各類別分配數量加總，跟送達進度無關
+  r.shipped = isFullyShipped(r); // 是否「全部」已分配類別都已送達
+  if(r.shipped) r.status='已送達';
+}
 
 function renderGiftPlan(){
   renderGiftYearFilter();
+  const canE=canEdit();
   const rows=gFiltered();
+  const cats=coCats(curCompany);
+  const catKeys=Object.keys(cats);
   $('gKpiTargets').textContent=rows.length;
   $('gKpiPlan').textContent=rows.reduce((s,r)=>s+(r.plan||0),0);
-  $('gKpiA').textContent=rows.reduce((s,r)=>s+(r.a||0),0);
-  $('gKpiB').textContent=rows.reduce((s,r)=>s+(r.b||0),0);
-  $('gKpiC').textContent=rows.reduce((s,r)=>s+(r.c||0),0);
+  if($('gCatKpis')){
+    $('gCatKpis').innerHTML=catKeys.map(k=>{
+      const tot=rows.reduce((s,r)=>s+((r.cats&&r.cats[k])||0),0);
+      return `<span class="pill" style="color:${catColor(k)};border:1px solid ${catColor(k)}22;background:${catColor(k)}14">${he(cats[k])} <b>${tot}</b></span>`;
+    }).join('');
+  }
   const depts=[...new Set(plan.filter(r=>r.co===curCompany).map(r=>r.dept))];
   $('deptList').innerHTML=depts.map(d=>`<option value="${d}">`).join('');
+  if($('btnAddGift')){ $('btnAddGift').disabled=!canE; $('btnAddGift').title=canE?'':'目前為唯讀權限，無法新增'; }
+  if($('btnCopyList')) $('btnCopyList').disabled=!canE;
+  if($('cnameInput')) $('cnameInput').disabled=!canE;
 
   renderTotal();
   renderPlan();
-  if(!rows.length){$('giftBody').innerHTML='<div class="empty">此公司／年節尚無送禮對象，點右上「＋ 新增送禮對象」開始規劃。</div>';return;}
+  if(!rows.length){
+    const catNote=catKeys.length ? `<div class="muted" style="font-size:12px;margin-top:6px">目前可用的禮盒類別：${catKeys.map(k=>he(cats[k])).join('、')}</div>` : '';
+    $('giftBody').innerHTML=`<div class="empty">此公司／年節尚無送禮對象，點右上「＋ 新增送禮對象」開始規劃。${catNote}</div>`;
+    return;
+  }
 
   const order=[]; const groups={};
   rows.forEach(r=>{ if(!groups[r.dept]){groups[r.dept]=[];order.push(r.dept);} groups[r.dept].push(r); });
+
+  const catHeadHtml='<th title="＝各類別自動加總，不能編輯">預計</th>'+
+    catKeys.map(k=>`<th style="color:${catColor(k)}">${he(cats[k])}</th>`).join('');
 
   let html='';
   order.forEach(dept=>{
     const g=groups[dept];
     const sub=g.reduce((s,r)=>s+(r.plan||0),0);
     html+=`<div class="card deptcard">
-      <div class="depthead"><span class="dn">🏷 ${dept}</span><span class="pill">${g.length} 位 · 預計 ${sub} 盒</span><button class="btn-add-sm" onclick="openGiftModal('${esc(dept).replace(/'/g,"\\'")}')">＋ 新增送禮對象</button></div>
+      <div class="depthead"><span class="dn">🏷 ${dept}</span><span class="pill">${g.length} 位 · 預計 ${sub} 盒</span><button class="btn-add-sm" ${canE?'':'disabled'} onclick="openGiftModal('${esc(dept).replace(/'/g,"\\'")}')">＋ 新增送禮對象</button></div>
       <div style="overflow-x:auto"><table class="plan">
       <thead><tr>
         <th class="tname">送禮對象</th>
-        <th>預計</th><th class="colpub">公益</th><th class="colsheng">聖保羅</th><th class="coldou">鬥茶王</th>
-        <th>已分配</th><th>備註</th><th>狀態</th><th></th>
+        ${catHeadHtml}
+        <th title="實際已扣庫存的數量">已分配</th><th>備註</th><th>狀態</th><th></th>
       </tr></thead><tbody>`;
     g.forEach(r=>{
-      const pend=alloc(r)!==(r.plan||0);
-      const dis=r.shipped?'disabled':'';
-      html+=`<tr id="grow-${r.id}" class="${pend?'pending':''}${r.shipped?' shipped':''}">
+      const anyDelivered=deliveredCount(r)>0;
+      const dis=(anyDelivered||!canE)?'disabled':'';
+      const catCells=catKeys.map(k=>{
+        const q=(r.cats&&r.cats[k])||0;
+        const done=isCatDelivered(r,k);
+        const catDis=(done||!canE)?'disabled':'';
+        let ship='';
+        if(q>0){
+          if(done) ship=`<button class="icon-del" title="此類別已送達，點擊可復原" onclick="revertOneCat(${r.id},'${k}')" style="color:var(--in)">✅</button>`;
+          else if(canE) ship=`<button class="icon-del" title="標記此類別已送達（會扣庫存）" onclick="deliverOneCat(${r.id},'${k}')">🚚</button>`;
+        }
+        return `<td class="numcell"><button class="numbtn" ${catDis} onclick="openNumModal(${r.id},'${k}')">${q}</button>${ship}</td>`;
+      }).join('');
+      let statusPill='';
+      if(r.shipped) statusPill=' <span class="pill" title="所有分配的類別都已送達（已扣庫存）；改回其他狀態會全部復原並加回庫存">✅ 已扣庫存</span>';
+      else if(anyDelivered) statusPill=` <span class="pill" title="部分類別已送達；可在各類別欄位下方按 🚚／✅ 個別送達或復原">🚚 已送達 ${deliveredCount(r)}/${activeCatCount(r)}</span>`;
+      html+=`<tr id="grow-${r.id}" class="${r.shipped?'shipped':''}">
         <td class="tname"><input value="${esc(r.target)}" ${dis} onchange="setG(${r.id},'target',this.value)"></td>
-        <td class="numcell"><button class="numbtn" ${dis} onclick="openNumModal(${r.id},'plan')">${r.plan}</button></td>
-        <td class="numcell"><button class="numbtn" ${dis} onclick="openNumModal(${r.id},'a')">${r.a}</button></td>
-        <td class="numcell"><button class="numbtn" ${dis} onclick="openNumModal(${r.id},'b')">${r.b}</button></td>
-        <td class="numcell"><button class="numbtn" ${dis} onclick="openNumModal(${r.id},'c')">${r.c}</button></td>
+        <td class="numcell" id="plan-${r.id}">${catSum(r)}</td>
+        ${catCells}
         <td class="numcell alloc" id="alloc-${r.id}">${alloc(r)}</td>
         <td><input value="${esc(r.note)}" ${dis} onchange="setG(${r.id},'note',this.value)" style="min-width:160px"></td>
-        <td><select class="statussel" onchange="handleStatus(${r.id},this.value)">${STATUS.map(s=>`<option ${s===r.status?'selected':''}>${s}</option>`).join('')}</select>${r.shipped?' <span class="pill" title="已扣庫存；改回其他狀態會自動把庫存加回並移除該筆出貨紀錄">已扣庫存</span>':''}</td>
-        <td>${r.shipped ? '' : `<button class="icon-del" title="刪除" onclick="delGift(${r.id})">🗑</button>`}</td>
+        <td><select class="statussel" ${canE?'':'disabled'} onchange="handleStatus(${r.id},this.value)">${STATUS.map(s=>`<option ${s===r.status?'selected':''}>${s}</option>`).join('')}</select>${statusPill}</td>
+        <td>${(anyDelivered||!canE) ? '' : `<button class="icon-del" title="刪除" onclick="delGift(${r.id})">🗑</button>`}</td>
       </tr>`;
     });
     html+='</tbody></table></div></div>';
@@ -923,84 +1093,137 @@ function renderGiftPlan(){
 }
 function esc(s){return String(s||'').replace(/"/g,'&quot;');}
 
-function setG(id,field,val){const r=plan.find(x=>x.id===id);if(r){r[field]=val;r.signer=currentUser||r.signer;savePlanSoon();}}
+function setG(id,field,val){
+  if(!canEdit()){ toast('目前為唯讀權限，無法編輯'); renderGiftPlan(); return; }
+  const r=plan.find(x=>x.id===id);if(r){r[field]=val;r.signer=currentUser||r.signer;markDirty();}
+}
 
-/* 數字欄位：點擊開對話視窗編輯 */
-const FIELD_LABEL={plan:'預計總數', a:'公益', b:'聖保羅', c:'鬥茶王'};
+/* 數字欄位：點擊開對話視窗編輯（預計＝各類別自動加總，不可直接編輯） */
 let numCtx={id:null, field:null};
 function openNumModal(id,field){
+  if(!canEdit()){ toast('目前為唯讀權限，無法編輯'); return; }
   const r=plan.find(x=>x.id===id); if(!r) return;
-  if(r.shipped){ toast('此列已扣庫存，請先把狀態改回再編輯'); return; }
+  if(isCatDelivered(r,field)){ toast('此類別已送達（已扣庫存），請先按 ✅ 復原再編輯'); return; }
   numCtx={id, field};
-  $('numTitle').textContent='編輯「'+FIELD_LABEL[field]+'」數量';
+  const label=catName(field);
+  $('numTitle').textContent='編輯「'+label+'」數量';
   $('numWho').textContent=r.target;
-  $('numLabel').textContent=FIELD_LABEL[field]+'（盒）';
-  $('numInput').value=r[field]||0;
+  $('numLabel').textContent=label+'（盒）';
+  $('numInput').value=(r.cats&&r.cats[field])||0;
   $('numModal').classList.add('show');
   setTimeout(()=>{const el=$('numInput');el.focus();el.select();},50);
 }
 function submitNum(){
+  if(!canEdit()){ toast('目前為唯讀權限，無法編輯'); closeModal('numModal'); return; }
   const r=plan.find(x=>x.id===numCtx.id);
   if(!r){closeModal('numModal');return;}
-  r[numCtx.field]=Math.max(0, parseInt($('numInput').value)||0);
+  if(!r.cats) r.cats={};
+  r.cats[numCtx.field]=Math.max(0, parseInt($('numInput').value)||0);
+  syncPlan(r);
   r.signer=currentUser||r.signer;
   closeModal('numModal');
   renderGiftPlan();
-  savePlanSoon();
+  markDirty();
 }
 
-/* 狀態變更 → 與庫存連動（連線時同步寫回試算表） */
+/* 嘗試把某幾個類別送達（扣庫存）；全部驗證通過才會真的扣，任何一個庫存不足就整批取消。
+ * 已經送達過的類別會自動略過（不會重複扣）。回傳 true=成功（或本來就沒有需要處理的） / false=有問題未執行。 */
+async function deliverCatsInternal(r, catKeys){
+  const need=catKeys.filter(k=>(r.cats&&r.cats[k]>0) && !isCatDelivered(r,k));
+  if(!need.length) return true;
+  const toApply=[], problems=[];
+  need.forEach(cat=>{
+    const cnt=r.cats[cat];
+    const it=items.find(i=>i.cat===cat && i.year===r.year && i.fest===r.fest);
+    if(!it) problems.push(`無對應${catName(cat)}（${r.year}${r.fest}）庫存品項`);
+    else if(it.qty<cnt) problems.push(`${it.name} 庫存不足（${it.qty}<${cnt}）`);
+    else toApply.push([cat,it,cnt]);
+  });
+  if(problems.length){ toast('無法送達：'+problems.join('；')); return false; }
+  if(!r.deliveredCats) r.deliveredCats={};
+  for(const [cat,it,cnt] of toApply){
+    const tx=await applyTx('出料', it, cnt, r.target);
+    r.deliveredCats[cat]={itemId:it.id, cnt, txId:String(tx.id)};
+  }
+  return true;
+}
+/* 把某幾個類別的送達復原（加回庫存、移除出貨紀錄） */
+async function revertCatsInternal(r, catKeys){
+  for(const cat of catKeys){
+    const d=r.deliveredCats && r.deliveredCats[cat];
+    if(!d) continue;
+    const it=items.find(i=>String(i.id)===String(d.itemId));
+    if(ONLINE){ const res=await api('adjustQty',{itemId:d.itemId, delta:d.cnt}); if(it) it.qty=res.itemQty; }
+    else if(it){ it.qty+=d.cnt; }
+    if(d.txId){
+      if(ONLINE) await api('removeTxs',{ids:[d.txId]});
+      txs=txs.filter(t=>String(t.id)!==String(d.txId));
+    }
+    delete r.deliveredCats[cat];
+  }
+}
+
+/* 單一類別：標記送達／復原（各類別欄位下方的 🚚／✅ 按鈕） */
+async function deliverOneCat(id, catKey){
+  if(!canEdit()){ toast('目前為唯讀權限，無法標記送達'); return; }
+  const r=plan.find(x=>x.id===id); if(!r) return;
+  if(isCatDelivered(r,catKey)){ toast('此類別已送達'); return; }
+  try{
+    const ok=await deliverCatsInternal(r,[catKey]);
+    if(!ok){ renderGiftPlan(); return; }
+    syncPlan(r);
+    await savePlanNow();
+    toast(`已標記「${catName(catKey)}」送達：${r.target}`);
+    renderAll(); renderGiftPlan();
+  }catch(err){ console.error(err); toast('送達失敗：'+err.message); renderAll(); renderGiftPlan(); }
+}
+async function revertOneCat(id, catKey){
+  if(!canEdit()){ toast('目前為唯讀權限，無法復原'); return; }
+  const r=plan.find(x=>x.id===id); if(!r) return;
+  if(!isCatDelivered(r,catKey)){ toast('此類別尚未送達'); return; }
+  try{
+    await revertCatsInternal(r,[catKey]);
+    syncPlan(r);
+    await savePlanNow();
+    toast(`已復原「${catName(catKey)}」：${r.target}（庫存已加回，可再編輯）`);
+    renderAll(); renderGiftPlan();
+  }catch(err){ console.error(err); toast('復原失敗：'+err.message); renderGiftPlan(); }
+}
+
+/* 狀態下拉：選「已送達」＝把這一列「目前還沒送達」的類別一次全部送達；
+ * 選回「待備貨／已備貨」時，若還有已送達的類別，會詢問是否要整批復原
+ * （只想調整其中某一個類別，直接用該類別欄位下方的 🚚／✅ 按鈕即可，不需要用這個下拉）。 */
 async function handleStatus(id, newStatus){
+  if(!canEdit()){ toast('目前為唯讀權限，無法變更狀態'); renderGiftPlan(); return; }
   const r=plan.find(x=>x.id===id); if(!r) return;
 
-  // 已送達 → 復原
-  if(r.shipped){
-    if(newStatus==='已送達') return;
-    try{
-      for(const d of (r.deliveredIds||[])){
-        const it=items.find(i=>String(i.id)===String(d.id));
-        if(ONLINE){ const res=await api('adjustQty',{itemId:d.id,delta:d.cnt}); if(it) it.qty=res.itemQty; }
-        else if(it){ it.qty+=d.cnt; }
-      }
-      if(r.txRefIds && r.txRefIds.length){
-        if(ONLINE) await api('removeTxs',{ids:r.txRefIds});
-        txs=txs.filter(t=>!r.txRefIds.includes(String(t.id)));
-      }
-      r.deliveredIds=[]; r.txRefIds=[]; r.shipped=false; r.status=newStatus;
-      await savePlanNow();
-      toast(`已復原：${r.target}（庫存已加回，可再編輯）`);
-      renderAll(); renderGiftPlan();
-    }catch(err){ console.error(err); toast('復原失敗：'+err.message); renderGiftPlan(); }
+  if(newStatus!=='已送達'){
+    if(deliveredCount(r)>0){
+      if(!confirm(`此對象目前有 ${deliveredCount(r)} 個類別已送達（已扣庫存），改回「${newStatus}」會把這些類別「全部」復原並加回庫存，確定要這樣做嗎？\n（如果只是想復原「某一個」類別，請直接按該類別欄位下方的 ✅ 按鈕，不用在這裡整批復原）`)){ renderGiftPlan(); return; }
+      try{
+        await revertCatsInternal(r, activeCatKeys(r));
+        r.status=newStatus;
+        syncPlan(r);
+        await savePlanNow();
+        toast(`已復原：${r.target}（庫存已加回，可再編輯）`);
+        renderAll(); renderGiftPlan();
+      }catch(err){ console.error(err); toast('復原失敗：'+err.message); renderGiftPlan(); }
+      return;
+    }
+    r.status=newStatus; markDirty(); renderGiftPlan();
     return;
   }
 
-  if(newStatus!=='已送達'){ r.status=newStatus; savePlanSoon(); return; }
-
-  // 找出有分配的類別
-  const need=Object.keys(CATFIELD).filter(cat=>r[CATFIELD[cat]]>0);
-  if(!need.length){ r.status='已送達'; await savePlanNow(); toast('已標記送達（未分配禮盒，未扣庫存）'); renderGiftPlan(); return; }
-
-  // 驗證每個類別都有對應庫存且足量（全有全無）
-  const toApply=[], problems=[];
-  need.forEach(cat=>{
-    const cnt=r[CATFIELD[cat]];
-    const it=items.find(i=>i.cat===cat && i.year===r.year && i.fest===r.fest);
-    if(!it) problems.push(`無對應${CATS[cat]}（${r.year}${r.fest}）庫存品項`);
-    else if(it.qty<cnt) problems.push(`${it.name} 庫存不足（${it.qty}<${cnt}）`);
-    else toApply.push([it,cnt]);
-  });
-  if(problems.length){ toast('無法送達：'+problems.join('；')); renderGiftPlan(); return; }
-
+  // newStatus === '已送達'：一次送達所有目前還沒送達的類別
+  const need=activeCatKeys(r).filter(k=>!isCatDelivered(r,k));
+  if(!need.length){ syncPlan(r); if(!activeCatCount(r)){ r.status='已送達'; } await savePlanNow(); toast(activeCatCount(r)?'已全部送達':'已標記送達（未分配禮盒，未扣庫存）'); renderGiftPlan(); return; }
   try{
-    const deliveredIds=[], txRefIds=[];
-    for(const [it,cnt] of toApply){
-      const tx=await applyTx('出料', it, cnt, r.target);
-      deliveredIds.push({id:it.id, cnt}); txRefIds.push(String(tx.id));
-    }
-    r.status='已送達'; r.shipped=true; r.deliveredIds=deliveredIds; r.txRefIds=txRefIds;
+    const ok=await deliverCatsInternal(r, need);
+    if(!ok){ renderGiftPlan(); return; }
+    syncPlan(r);
     await savePlanNow();
     toast(`已送達並扣庫存：${r.target}`);
-    renderGiftPlan();
+    renderAll(); renderGiftPlan();
   }catch(err){ console.error(err); toast('送達失敗：'+err.message); renderAll(); renderGiftPlan(); }
 }
 
@@ -1042,16 +1265,23 @@ function renderVersionTable(planArr, comps){
     html+=`<div style="font-weight:700;margin:10px 0 4px">🏢 ${he(cname)}</div>`;
     combos.forEach(cb=>{
       const pp=cb.split('|'); const yy=pp[0], ff=pp[1];
-      const seg=crows.filter(r=>String(r.year)===yy&&r.fest===ff);
+      const seg=crows.filter(r=>String(r.year)===yy&&r.fest===ff).map(r=>Object.assign({}, r, {_cats: parseCatsField(r)}));
+      const keySet=new Set(); seg.forEach(r=>Object.keys(r._cats).forEach(k=>keySet.add(k)));
+      const keys=sortCatKeys([...keySet]);
       html+=`<div class="muted" style="font-size:12px;margin:6px 0 2px">${yy} ${ff}</div>`;
-      html+='<div style="overflow-x:auto"><table class="totaltable"><thead><tr><th>部門</th><th>對象</th><th>預計</th><th>公益</th><th>聖保羅</th><th>鬥茶王</th><th>狀態</th></tr></thead><tbody>';
-      seg.forEach(r=>{ html+=`<tr><td>${he(r.dept)}</td><td><b>${he(r.target)}</b></td><td class="c">${r.plan||0}</td><td class="c">${r.a||0}</td><td class="c">${r.b||0}</td><td class="c">${r.c||0}</td><td class="c">${statusBadge(r.status)}</td></tr>`; });
+      html+='<div style="overflow-x:auto"><table class="totaltable"><thead><tr><th>部門</th><th>對象</th><th>預計</th>'+
+        keys.map(k=>`<th>${he(catName(k))}</th>`).join('')+'<th>狀態</th></tr></thead><tbody>';
+      seg.forEach(r=>{
+        const catCells=keys.map(k=>`<td class="c">${r._cats[k]||0}</td>`).join('');
+        html+=`<tr><td>${he(r.dept)}</td><td><b>${he(r.target)}</b></td><td class="c">${r.plan||0}</td>${catCells}<td class="c">${statusBadge(r.status)}</td></tr>`;
+      });
       html+='</tbody></table></div>';
     });
   });
   return html;
 }
 async function restoreVersion(row, ts){
+  if(!canEdit()){ toast('目前為唯讀權限，無法還原版本'); return; }
   if(!confirm('確定要把「目前的送禮規劃」還原成 '+ts+' 的版本嗎？\n（目前的現況也已是一個版本，之後可再還原回來）')) return;
   try{
     const d=await api('loadVersion',{row});
@@ -1080,6 +1310,7 @@ function openCopyModal(){
   $('copyModal').classList.add('show');
 }
 function submitCopy(){
+  if(!canEdit()){ toast('目前為唯讀權限，無法複製清單'); closeModal('copyModal'); return; }
   const y=parseInt($('gYear').value)||new Date().getFullYear(), f=$('gFest').value;
   const [sy,sf]=$('copySource').value.split('|');
   const copyAlloc=$('copyAlloc').checked, skipDup=$('copySkipDup').checked;
@@ -1089,61 +1320,152 @@ function submitCopy(){
   let added=0, skipped=0;
   src.forEach(r=>{
     if(skipDup && existing.has(key(r))){ skipped++; return; }
-    plan.push({id:pseq++, co:curCompany, year:y, fest:f, dept:r.dept, target:r.target,
-      plan:r.plan||0, a:copyAlloc?(r.a||0):0, b:copyAlloc?(r.b||0):0, c:copyAlloc?(r.c||0):0,
-      note:r.note||'', signer:r.signer||'', status:'待備貨', shipped:false, txRefIds:[], deliveredIds:[]});
+    let cats={};
+    if(copyAlloc){ Object.keys(r.cats||{}).forEach(k=>{ cats[k]=r.cats[k]||0; }); }
+    const row={id:pseq++, co:curCompany, year:y, fest:f, dept:r.dept, target:r.target,
+      plan:0, cats:cats, deliveredCats:{},
+      note:r.note||'', signer:r.signer||'', status:'待備貨', shipped:false};
+    syncPlan(row);
+    plan.push(row);
     existing.add(key(r)); added++;
   });
   closeModal('copyModal');
-  renderGiftPlan(); savePlanNow();
+  renderGiftPlan(); if(added) markDirty();
   toast(added ? `已沿用 ${added} 位${skipped?`，略過 ${skipped} 位重複`:''}` : '沒有新增（對象都已存在）');
 }
 function openGiftModal(dept){
   $('giDept').value = (typeof dept==='string') ? dept : '';
+  populateGiCatOptions();
   $('giftModal').classList.add('show');
   setTimeout(()=>$( (typeof dept==='string'&&dept) ? 'giTarget':'giDept').focus(),50);
 }
+/* 「禮盒類別」下拉：列出目前公司可用的類別，並附一個「＋ 新增類別…」選項 */
+function populateGiCatOptions(){
+  const sel=$('giCat'); if(!sel) return;
+  const cats=coCats(curCompany);
+  let html='<option value="">未分配（之後再決定）</option>';
+  Object.keys(cats).forEach(k=>{ html+=`<option value="${he(k)}">${he(cats[k])}</option>`; });
+  html+='<option value="__new__">✚ 新增類別…</option>';
+  sel.innerHTML=html;
+  if($('giNewCatRow')) $('giNewCatRow').style.display='none';
+  if($('giNewCatName')) $('giNewCatName').value='';
+}
+function onGiCatChange(){
+  if($('giCat').value==='__new__'){
+    $('giNewCatRow').style.display='block';
+    setTimeout(()=>$('giNewCatName').focus(),30);
+  }else{
+    $('giNewCatRow').style.display='none';
+  }
+}
+function cancelNewCat(){
+  $('giNewCatRow').style.display='none';
+  $('giCat').value='';
+}
+function confirmNewCat(){
+  if(!canEdit()){ toast('目前為唯讀權限，無法新增類別'); return; }
+  const name=$('giNewCatName').value.trim();
+  if(!name){ toast('請輸入類別名稱'); return; }
+  const existing=coCats(curCompany);
+  if(Object.values(existing).some(n=>n===name)){ toast('此類別已存在'); return; }
+  const key=newCatKey();
+  if(!companies[curCompany].categories) companies[curCompany].categories={};
+  companies[curCompany].categories[key]=name;
+  populateGiCatOptions();
+  $('giCat').value=key;
+  $('giNewCatRow').style.display='none';
+  markDirty();
+  renderGiftPlan(); // 立即讓新類別出現在表格欄位上
+  toast('已新增類別：'+name);
+}
 function submitGift(){
+  if(!canEdit()){ toast('目前為唯讀權限，無法新增送禮對象'); closeModal('giftModal'); return; }
   const target=$('giTarget').value.trim();
   const dept=$('giDept').value.trim()||'未分類';
   if(!target){toast('請輸入送禮對象');return;}
   const cat=$('giCat').value, qty=parseInt($('giQty').value)||0;
+  if(cat==='__new__'){ toast('請先按「確認新增這個類別」完成新增類別'); return; }
+  const cats={};
+  Object.keys(coCats(curCompany)).forEach(k=>{ cats[k]=0; });
   const row={id:pseq++, co:curCompany, year:parseInt($('gYear').value)||new Date().getFullYear(),
-    fest:$('gFest').value, dept, target, plan:qty, a:0, b:0, c:0,
-    note:$('giNote').value.trim(), signer:(currentUser||''), status:'待備貨', shipped:false, txRefIds:[], deliveredIds:[]};
-  if(cat) row[CATFIELD[cat]]=qty;
+    fest:$('gFest').value, dept, target, plan:qty, cats:cats, deliveredCats:{},
+    note:$('giNote').value.trim(), signer:(currentUser||''), status:'待備貨', shipped:false};
+  if(cat) row.cats[cat]=qty;
+  syncPlan(row);
   plan.push(row);
   ['giTarget','giNote'].forEach(i=>$(i).value=''); $('giQty').value=1; $('giCat').value='';
-  closeModal('giftModal'); renderGiftPlan(); savePlanNow(); toast(`已新增 ${target}`);
+  closeModal('giftModal'); renderGiftPlan(); markDirty(); toast(`已新增 ${target}`);
 }
-function delGift(id){const i=plan.findIndex(x=>x.id===id);if(i>=0){const t=plan[i].target;plan.splice(i,1);renderGiftPlan();savePlanNow();toast(`已刪除 ${t}`);}}
+function delGift(id){
+  if(!canEdit()){ toast('目前為唯讀權限，無法刪除'); return; }
+  const r=plan.find(x=>x.id===id); if(!r) return;
+  if(deliveredCount(r)>0){ toast('此對象已有類別送達（已扣庫存），請先將對應類別復原後才能刪除'); return; }
+  const i=plan.findIndex(x=>x.id===id);if(i>=0){const t=plan[i].target;plan.splice(i,1);renderGiftPlan();markDirty();toast(`已刪除 ${t}`);}
+}
 
-/* ====================== 登入 / 用戶管理（軟性入口，記錄編輯者） ====================== */
+/* ====================== 登入 / 用戶管理（進站即登入 + 權限） ====================== */
 let users=['ROOT'];
+let userPerms={};   // {小寫用戶名: 'edit'|'view'}，只對非 ROOT 用戶有意義
 let currentUser='';
 let pendingPage=null;
+let loginMandatory=false;
 function initAuth(){
   try{ const u=JSON.parse(localStorage.getItem('giftUsers')); if(Array.isArray(u)&&u.length) users=u; }catch(e){}
   if(users.indexOf('ROOT')<0) users.unshift('ROOT');
+  try{ const pm=JSON.parse(localStorage.getItem('giftUserPerms')); if(pm && typeof pm==='object') userPerms=pm; }catch(e){}
   currentUser=localStorage.getItem('giftUser')||'';
   if(currentUser && !users.some(u=>u.toLowerCase()===currentUser.toLowerCase())) currentUser='';
   updateUserUI();
+  if(!currentUser){
+    showLoginGate(true, '歡迎使用年節禮盒庫存系統，請選擇您的身分後進入');
+  }
 }
 function saveUsers(){ try{ localStorage.setItem('giftUsers', JSON.stringify(users)); }catch(e){} }
+function savePerms(){ try{ localStorage.setItem('giftUserPerms', JSON.stringify(userPerms)); }catch(e){} }
+function canEdit(){ return currentUser==='ROOT' || (userPerms[(currentUser||'').toLowerCase()]||'edit')==='edit'; }
 function updateUserUI(){
   if($('curUserName')) $('curUserName').textContent=currentUser||'未登入';
   if($('rootTools')) $('rootTools').style.display=(currentUser==='ROOT')?'inline-flex':'none';
   if($('userListShow')) $('userListShow').textContent='現有用戶：'+users.join('、');
   if($('userList')) $('userList').innerHTML=users.map(u=>`<option value="${he(u)}">`).join('');
+  if(currentUser==='ROOT') renderUserPermList();
+}
+function renderUserPermList(){
+  const el=$('userPermList'); if(!el) return;
+  const others=users.filter(u=>u.toUpperCase()!=='ROOT');
+  el.innerHTML = others.length ? others.map(u=>{
+    const p=(userPerms[u.toLowerCase()]||'edit');
+    return `<span class="pill" style="display:inline-flex;align-items:center;gap:4px">${he(u)}
+      <select onchange="setUserPerm('${he(u).replace(/'/g,"\\'")}', this.value)" style="border:1px solid var(--line);border-radius:6px;padding:2px 4px;font-size:11px;font-family:inherit">
+        <option value="edit" ${p==='edit'?'selected':''}>可編輯</option>
+        <option value="view" ${p==='view'?'selected':''}>唯讀</option>
+      </select></span>`;
+  }).join('') : '<span class="muted" style="font-size:12px">尚無其他用戶</span>';
+}
+function setUserPerm(u,val){
+  if(currentUser!=='ROOT'){ toast('只有 ROOT 能設定權限'); return; }
+  userPerms[u.toLowerCase()]=val; savePerms();
+  toast(`已將 ${u} 設為${val==='edit'?'可編輯':'唯讀'}`);
+  renderGiftPlan();
 }
 function enterGift(){ gateThen('gift'); }
 function enterSchedule(){ gateThen('schedule'); }
 function gateThen(page){
   if(currentUser){ switchPage(page); afterEnter(page); return; }
-  pendingPage=page;
-  $('loginHint').textContent='進入「'+(page==='gift'?'送禮規劃':'送禮行程')+'」需要選擇用戶';
-  $('loginSelect').innerHTML=users.map(u=>`<option value="${he(u)}">${he(u)}</option>`).join('');
+  showLoginGate(false, '進入「'+(page==='gift'?'送禮規劃':'送禮行程')+'」需要選擇用戶', page);
+}
+function showLoginGate(mandatory, hintText, pending){
+  loginMandatory=mandatory;
+  pendingPage=pending||null;
+  $('loginHint').textContent=hintText;
+  $('loginSelect').value='';
+  if($('loginCancelBtn')) $('loginCancelBtn').style.display = mandatory ? 'none' : 'inline-block';
   $('loginModal').classList.add('show');
+  setTimeout(()=>{ const el=$('loginSelect'); if(el) el.focus(); },50);
+}
+function cancelLogin(){
+  if(loginMandatory){ toast('請先選擇用戶再繼續使用'); return; }
+  closeModal('loginModal');
 }
 function doLogin(){
   const name=$('loginSelect').value.trim();
@@ -1152,22 +1474,31 @@ function doLogin(){
   if(!match){ toast('查無此用戶名稱，請洽 ROOT 新增'); return; }
   currentUser=match;
   try{ localStorage.setItem('giftUser', currentUser); }catch(e){}
-  closeModal('loginModal'); updateUserUI();
-  const p=pendingPage||'gift'; pendingPage=null;
-  switchPage(p); afterEnter(p);
+  loginMandatory=false;
+  closeModal('loginModal'); updateUserUI(); updateSaveUI();
+  if(pendingPage){ const p=pendingPage; pendingPage=null; switchPage(p); afterEnter(p); }
+  renderGiftPlan(); renderTotal(); renderPlan();
   toast('已登入：'+currentUser);
 }
-function logout(){ currentUser=''; try{ localStorage.removeItem('giftUser'); }catch(e){} updateUserUI(); switchPage('total'); toast('已登出'); }
+function logout(){
+  if(planDirty && !confirm('目前有尚未儲存的變更，登出後暫存在本機仍會保留，確定要登出嗎？')) return;
+  currentUser=''; try{ localStorage.removeItem('giftUser'); }catch(e){}
+  updateUserUI(); updateSaveUI(); switchPage('total'); toast('已登出');
+  showLoginGate(true, '歡迎回來，請選擇用戶登入後繼續使用');
+}
 function addUser(){
   if(currentUser!=='ROOT'){ toast('只有 ROOT 能新增用戶'); return; }
   const n=$('newUserName').value.trim();
   if(!n){ toast('請輸入用戶名稱'); return; }
   if(n.toLowerCase()==='root'||users.some(u=>u.toLowerCase()===n.toLowerCase())){ toast('用戶已存在'); return; }
-  users.push(n); saveUsers(); $('newUserName').value=''; updateUserUI(); toast('已新增用戶：'+n);
+  const perm=$('newUserPerm') ? $('newUserPerm').value : 'edit';
+  users.push(n); userPerms[n.toLowerCase()]=perm; saveUsers(); savePerms();
+  $('newUserName').value=''; updateUserUI(); toast(`已新增用戶：${n}（${perm==='edit'?'可編輯':'唯讀'}）`);
 }
 function afterEnter(page){
   if(page==='schedule'){ renderSchedule(); }
   else if(page==='gift'){ updateUserUI(); renderGiftPlan(); }
+  updateSaveUI();
 }
 
 /* ====================== 送禮行程（配送行事曆） ====================== */
@@ -1184,31 +1515,36 @@ function schedMonth(delta){
   schedYM={y,m}; renderSchedule();
 }
 function setSchedDate(id,val){
+  if(!canEdit()){ toast('目前為唯讀權限，無法安排配送日期'); renderSchedule(); return; }
   const r=plan.find(x=>x.id===id); if(!r) return;
   r.date=val||''; r.signer=currentUser||r.signer;
-  saveDatesLocal(); savePlanSoon(); renderSchedule();
+  saveDatesLocal(); markDirty(); renderSchedule();
 }
 function openSchedEdit(id){
   const r=plan.find(x=>x.id===id); if(!r) return;
   schedEditId=id;
+  const canE=canEdit();
   $('schedEditTitle').textContent='配送安排 · '+r.target;
-  $('schedDateInput').value=r.date||'';
+  $('schedDateInput').value=r.date||''; $('schedDateInput').disabled=!canE;
   $('schedDeliverRow').innerHTML = (r.status==='已送達')
-    ? `<button class="btn-ghost" onclick="schedToggleDeliver(false)">↩ 改回未送達</button> <span class="muted" style="font-size:12px">目前已送達（改回會把庫存加回）</span>`
-    : `<button class="btn-in" onclick="schedToggleDeliver(true)">✅ 標記已送達（扣庫存）</button>`;
+    ? `<button class="btn-ghost" ${canE?'':'disabled'} onclick="schedToggleDeliver(false)">↩ 改回未送達</button> <span class="muted" style="font-size:12px">目前已送達（改回會把庫存加回）</span>`
+    : `<button class="btn-in" ${canE?'':'disabled'} onclick="schedToggleDeliver(true)">✅ 標記已送達（扣庫存）</button>`;
   $('schedModal').classList.add('show');
 }
 function schedSaveDate(){
+  if(!canEdit()){ toast('目前為唯讀權限，無法安排配送日期'); closeModal('schedModal'); return; }
   const r=plan.find(x=>x.id===schedEditId);
-  if(r){ r.date=$('schedDateInput').value||''; r.signer=currentUser||r.signer; saveDatesLocal(); savePlanSoon(); }
+  if(r){ r.date=$('schedDateInput').value||''; r.signer=currentUser||r.signer; saveDatesLocal(); markDirty(); }
   closeModal('schedModal'); renderSchedule();
 }
 function schedClearDate(){
+  if(!canEdit()){ toast('目前為唯讀權限，無法安排配送日期'); closeModal('schedModal'); return; }
   const r=plan.find(x=>x.id===schedEditId);
-  if(r){ r.date=''; saveDatesLocal(); savePlanSoon(); }
+  if(r){ r.date=''; saveDatesLocal(); markDirty(); }
   closeModal('schedModal'); renderSchedule();
 }
 async function schedToggleDeliver(toDelivered){
+  if(!canEdit()){ toast('目前為唯讀權限，無法變更送達狀態'); closeModal('schedModal'); return; }
   const id=schedEditId; closeModal('schedModal');
   await handleStatus(id, toDelivered?'已送達':'待備貨');
   renderSchedule();
@@ -1265,7 +1601,8 @@ function renderSchedule(){
   else if(!uns.length){ uh+='<div class="empty">🎉 所有對象都排好配送日期了！</div>'; }
   else{
     uh+='<div style="overflow-x:auto"><table class="totaltable"><thead><tr><th>送禮對象</th><th>部門</th><th>狀態</th><th>指定配送日期</th></tr></thead><tbody>';
-    uns.forEach(r=>{ uh+=`<tr><td><b>${he(r.target)}</b></td><td class="muted">${he(r.dept)}</td><td class="c">${statusBadge(r.status)}</td><td><input type="date" min="${schedYM.y}-${p(schedYM.m)}-01" onchange="setSchedDate(${r.id}, this.value)" style="padding:5px 8px;border:1px solid var(--line);border-radius:7px;font-family:inherit;font-size:13px"></td></tr>`; });
+    const canES=canEdit();
+    uns.forEach(r=>{ uh+=`<tr><td><b>${he(r.target)}</b></td><td class="muted">${he(r.dept)}</td><td class="c">${statusBadge(r.status)}</td><td><input type="date" min="${schedYM.y}-${p(schedYM.m)}-01" ${canES?'':'disabled'} onchange="setSchedDate(${r.id}, this.value)" style="padding:5px 8px;border:1px solid var(--line);border-radius:7px;font-family:inherit;font-size:13px"></td></tr>`; });
     uh+='</tbody></table></div>';
   }
   uh+='</div>';
@@ -1329,8 +1666,24 @@ function statusBadge(s){
   const map={'已送達':'b-in','已備貨':'b-prep','待備貨':'b-del'};
   return `<span class="badge ${map[s]||'b-del'}">${s||'待備貨'}</span>`;
 }
-function sentBadge(s){
-  return s==='已送達' ? '<span class="badge b-in">✅ 已送</span>' : '<span class="badge b-out">⏳ 未送</span>';
+/* 送達徽章：依「已送達類別數／總分配類別數」顯示全送／未送／部分送達 */
+function sentBadge(r){
+  const ac=activeCatCount(r), dc=deliveredCount(r);
+  if(!ac) return r.status==='已送達' ? '<span class="badge b-in">✅ 已送</span>' : '<span class="badge b-out">⏳ 未送</span>';
+  if(dc===0) return '<span class="badge b-out">⏳ 未送</span>';
+  if(dc===ac) return '<span class="badge b-in">✅ 已送</span>';
+  return `<span class="badge b-prep">🚚 部分 ${dc}/${ac}</span>`;
+}
+/* 「誰還沒送」用：顯示這個人被分配到哪些禮盒類別、各多少盒；每個類別各自依照是否已送達顯示刪除線，
+ * 一眼就能看出這個人裡面「哪個類別」還沒送、哪個類別已經送了 */
+function giftDetailHtml(r){
+  const entries=Object.keys(r.cats||{}).filter(k=>(r.cats[k]||0)>0);
+  if(!entries.length) return '<span class="muted" style="font-size:12px">（未分配禮盒）</span>';
+  return entries.map(k=>{
+    const col=catColor(k);
+    const done=isCatDelivered(r,k);
+    return `<span class="pill" style="color:${col};border:1px solid ${col}33;background:${col}14;margin:1px 3px 1px 0;white-space:nowrap${done?';opacity:.55;text-decoration:line-through':''}">${done?'✅ ':''}${he(catName(k))}×${r.cats[k]}</span>`;
+  }).join('');
 }
 var _totalInit=false;
 function renderTotal(){
@@ -1386,10 +1739,11 @@ function renderTotal(){
         <span class="pill">${y} ${f}</span>
         <span class="pill">${g.length} 位 · ${g.reduce((s,r)=>s+(r.plan||0),0)} 盒</span></div>
       <div style="overflow-x:auto"><table class="totaltable">
-        <thead><tr><th>送達</th><th>送禮對象</th><th>狀態</th></tr></thead><tbody>`;
+        <thead><tr><th>送達</th><th>送禮對象</th><th>禮盒明細</th><th>狀態</th></tr></thead><tbody>`;
     g.forEach(r=>{
       html+=`<tr>
-        <td class="c">${sentBadge(r.status)}</td><td><b>${he(r.target)}</b></td>
+        <td class="c">${sentBadge(r)}</td><td><b>${he(r.target)}</b> <span class="pill">🏢 ${he(cname)}</span></td>
+        <td>${giftDetailHtml(r)}</td>
         <td class="c">${statusBadge(r.status)}</td></tr>`;
     });
     html+='</tbody></table></div></div>';
@@ -1418,6 +1772,9 @@ function renderPlan(){
     const cname=(companies[co]&&companies[co].name)||co;
     const crows=all.filter(r=>r.co===co);
     const cdone=crows.filter(r=>r.status==='已送達').length;
+    const keySet=new Set(Object.keys(coCats(co)));
+    crows.forEach(r=>Object.keys(r.cats||{}).forEach(k=>keySet.add(k)));
+    const keys=sortCatKeys([...keySet]);
     html+=`<div class="card yearblock">
       <div class="yearhead"><h2>🏢 ${he(cname)}</h2>
         <span class="pill">${crows.length} 位 · 預計 ${crows.reduce((s,r)=>s+(r.plan||0),0)} 盒</span>
@@ -1429,11 +1786,12 @@ function renderPlan(){
       const seg=crows.filter(r=>String(r.year)===yy&&r.fest===ff);
       html+=`<div style="margin:12px 0 6px"><b>${yy} <span class="fest">${ff}</span></b> <span class="muted" style="font-size:12px">${seg.length} 位 · 預計 ${seg.reduce((s,r)=>s+(r.plan||0),0)} 盒</span></div>`;
       html+=`<div style="overflow-x:auto"><table class="totaltable">
-        <thead><tr><th>部門</th><th>送禮對象</th><th>預計</th><th>公益</th><th>聖保羅</th><th>鬥茶王</th><th>備註</th><th>狀態</th></tr></thead><tbody>`;
+        <thead><tr><th>部門</th><th>送禮對象</th><th>預計</th>${keys.map(k=>`<th>${he(catName(k))}</th>`).join('')}<th>備註</th><th>狀態</th></tr></thead><tbody>`;
       seg.forEach(r=>{
+        const catCells=keys.map(k=>`<td class="c">${(r.cats&&r.cats[k])||0}</td>`).join('');
         html+=`<tr>
           <td>${he(r.dept)}</td><td><b>${he(r.target)}</b></td>
-          <td class="c qty">${r.plan||0}</td><td class="c">${r.a||0}</td><td class="c">${r.b||0}</td><td class="c">${r.c||0}</td>
+          <td class="c qty">${r.plan||0}</td>${catCells}
           <td class="muted">${he(r.note)}</td>
           <td class="c">${statusBadge(r.status)}</td></tr>`;
       });
@@ -1469,7 +1827,11 @@ async function submitTx(){
 }
 
 /* ---------- Modal：新增禮盒 ---------- */
-function openItemModal(){$('itemModal').classList.add('show');}
+function openItemModal(){
+  const cats=allCats();
+  $('niCat').innerHTML=Object.keys(cats).map(k=>`<option value="${he(k)}">${he(cats[k])}</option>`).join('');
+  $('itemModal').classList.add('show');
+}
 async function submitItem(){
   const name=$('niName').value.trim();
   if(!name){toast('禮盒名稱為必填');return;}

@@ -29,9 +29,11 @@ const FESTS = ['過年', '端午', '中秋'];
 /* ❷ 送禮總表頁網址（GitHub Pages，截圖模式）；換成你自己的網址即可 */
 const TOTAL_URL = 'https://brisbanekan.github.io/stocksystem/?view=total&shot=1';
 
-/* 送禮規劃欄位順序（程式內部 key） */
-const PLAN_KEYS = ['id','co','year','fest','dept','target','plan','a','b','c','note','signer','status','shipped','txRefs','delivered','date'];
-const PLAN_HEADERS = ['id','公司','年分','節日','部門','送禮對象','預計','公益','聖保羅','鬥茶王','備註','簽核','狀態','已扣庫存','出貨紀錄id','配送明細','配送日期'];
+/* 送禮規劃欄位順序（程式內部 key）
+ * a/b/c 只保留公益／聖保羅／鬥茶王三個內建類別的數字，方便在試算表用肉眼看；
+ * cats 才是完整資料（JSON，含各公司自訂的禮盒類別），前端一律以 cats 為準，a/b/c 為輔助顯示。 */
+const PLAN_KEYS = ['id','co','year','fest','dept','target','plan','a','b','c','note','signer','status','shipped','txRefs','delivered','date','cats','deliveredCats'];
+const PLAN_HEADERS = ['id','公司','年分','節日','部門','送禮對象','預計','公益','聖保羅','鬥茶王','備註','簽核','狀態','已扣庫存','出貨紀錄id','配送明細','配送日期','類別JSON(含自訂類別)','各類別送達明細JSON'];
 
 /* ======================================================
  *  入口：doPost（LINE 與 網頁 共用） / doGet
@@ -167,13 +169,15 @@ function apiSavePlan(req) {
   if (rows.length) sh.getRange(2, 1, rows.length, PLAN_KEYS.length).setValues(rows);
   sh.setFrozenRows(1);
 
-  // 公司名稱
+  // 公司名稱＋各公司自訂禮盒類別（第3欄為 categories 的 JSON，例如 {"cat_xxx":"特別禮盒"}）
   const cs = sheet(SHEET_CO) || ss().insertSheet(SHEET_CO);
   cs.clearContents();
-  cs.getRange(1, 1, 1, 2).setValues([['key', '名稱']]).setFontWeight('bold');
+  cs.getRange(1, 1, 1, 3).setValues([['key', '名稱', '自訂類別JSON']]).setFontWeight('bold');
   const co = req.companies || {};
-  const crows = Object.keys(co).map(function (k) { return [k, (co[k] && co[k].name) || k]; });
-  if (crows.length) cs.getRange(2, 1, crows.length, 2).setValues(crows);
+  const crows = Object.keys(co).map(function (k) {
+    return [k, (co[k] && co[k].name) || k, JSON.stringify((co[k] && co[k].categories) || {})];
+  });
+  if (crows.length) cs.getRange(2, 1, crows.length, 3).setValues(crows);
   cs.setFrozenRows(1);
 
   // 版本快照（每次儲存留一版；與上一版相同則略過）
@@ -275,7 +279,12 @@ function readCompanies() {
   if (!sh) return out;
   const data = sh.getDataRange().getValues();
   data.shift();
-  data.forEach(function (r) { if (r[0] !== '') out[r[0]] = { name: r[1] || r[0] }; });
+  data.forEach(function (r) {
+    if (r[0] === '') return;
+    var cats = {};
+    try { cats = r[2] ? JSON.parse(r[2]) : {}; } catch (e) { cats = {}; }
+    out[r[0]] = { name: r[1] || r[0], categories: cats };
+  });
   return out;
 }
 
@@ -448,7 +457,7 @@ function parseCommand(text) {
       if (res.status === 'none') return '❓ 找不到禮盒「' + arg + '」';
       if (res.status === 'ambiguous') return ambigMsg(res.candidates);
       const it = res.item;
-      return '🎁 ' + it.name + '\n分類：' + it.cat + ' ' + CATS[it.cat] +
+      return '🎁 ' + it.name + '\n分類：' + it.cat + ' ' + (CATS[it.cat] || it.cat) +
         '\n年分/節日：' + it.year + ' ' + it.fest + '\n規格：' + it.spec +
         '\n即時庫存：' + it.qty + ' ' + it.unit;
     }
@@ -462,7 +471,7 @@ function parseCommand(text) {
     if (res.status === 'none') return '❓ 找不到禮盒';
     if (res.status === 'ambiguous') return ambigMsg(res.candidates);
     const it = res.item;
-    return '📐 ' + it.name + '\n規格：' + it.spec + '\n分類：' + it.cat + ' ' + CATS[it.cat] + '\n單位：' + it.unit;
+    return '📐 ' + it.name + '\n規格：' + it.spec + '\n分類：' + it.cat + ' ' + (CATS[it.cat] || it.cat) + '\n單位：' + it.unit;
   }
 
   if (cmd === '進料' || cmd === '出料') {
@@ -524,31 +533,32 @@ function initSheets() {
   if (!shPlan) shPlan = book.insertSheet(SHEET_PLAN);
   if (shPlan.getLastRow() === 0) {
     shPlan.getRange(1, 1, 1, PLAN_HEADERS.length).setValues([PLAN_HEADERS]).setFontWeight('bold');
+    // 最後三欄依序是 date（配送日期，種子資料留空）、cats（完整類別JSON，種子資料用 a/b/c 組出來）、deliveredCats（各類別送達明細JSON，種子資料皆未送達留空物件）
     const seed = [
-      [1,'c1',2026,'過年','員工','員工',10,10,0,0,'','同右','已備貨',false,'','[]'],
-      [2,'c1',2026,'過年','員工','許雅君',1,1,0,0,'','','待備貨',false,'','[]'],
-      [3,'c1',2026,'過年','員工','方新齊',1,1,0,0,'','','待備貨',false,'','[]'],
-      [4,'c1',2026,'過年','業務部','呂文煜-水上鄉大崙村現任村長',1,1,0,0,'關懷社區事務、維持良好關係','','待備貨',false,'','[]'],
-      [5,'c1',2026,'過年','業務部','余逸操-太保市公所社會課長',1,1,0,0,'保持好關係，省公司鄰居','','待備貨',false,'','[]'],
-      [6,'c1',2026,'過年','業務部','張炯昌',1,1,0,0,'已續租約至 115/8/15','','待備貨',false,'','[]'],
-      [7,'c1',2026,'過年','工務部','總工務所地主',2,0,0,0,'','','待備貨',false,'','[]'],
-      [8,'c1',2026,'過年','工務部','桔境-廁房楊先生',1,0,0,0,'','','待備貨',false,'','[]'],
-      [9,'c1',2026,'過年','工務部','韻綠-花隆堂',1,0,0,0,'','','待備貨',false,'','[]'],
-      [10,'c1',2026,'過年','開發設計部','黎光樺 建築師',1,0,0,0,'','','待備貨',false,'','[]'],
-      [11,'c1',2026,'過年','公司','股東',4,0,0,0,'緒4、凱4','','待備貨',false,'','[]'],
-      [12,'c2',2026,'過年','管理部','全體同仁',8,8,0,0,'','','待備貨',false,'','[]'],
-      [13,'c2',2026,'過年','業務部','重要客戶 A',2,0,2,0,'','','待備貨',false,'','[]']
+      [1,'c1',2026,'過年','員工','員工',10,10,0,0,'','同右','已備貨',false,'','[]','','{"A":10,"B":0,"C":0}','{}'],
+      [2,'c1',2026,'過年','員工','許雅君',1,1,0,0,'','','待備貨',false,'','[]','','{"A":1,"B":0,"C":0}','{}'],
+      [3,'c1',2026,'過年','員工','方新齊',1,1,0,0,'','','待備貨',false,'','[]','','{"A":1,"B":0,"C":0}','{}'],
+      [4,'c1',2026,'過年','業務部','呂文煜-水上鄉大崙村現任村長',1,1,0,0,'關懷社區事務、維持良好關係','','待備貨',false,'','[]','','{"A":1,"B":0,"C":0}','{}'],
+      [5,'c1',2026,'過年','業務部','余逸操-太保市公所社會課長',1,1,0,0,'保持好關係，省公司鄰居','','待備貨',false,'','[]','','{"A":1,"B":0,"C":0}','{}'],
+      [6,'c1',2026,'過年','業務部','張炯昌',1,1,0,0,'已續租約至 115/8/15','','待備貨',false,'','[]','','{"A":1,"B":0,"C":0}','{}'],
+      [7,'c1',2026,'過年','工務部','總工務所地主',2,0,0,0,'','','待備貨',false,'','[]','','{"A":0,"B":0,"C":0}','{}'],
+      [8,'c1',2026,'過年','工務部','桔境-廁房楊先生',1,0,0,0,'','','待備貨',false,'','[]','','{"A":0,"B":0,"C":0}','{}'],
+      [9,'c1',2026,'過年','工務部','韻綠-花隆堂',1,0,0,0,'','','待備貨',false,'','[]','','{"A":0,"B":0,"C":0}','{}'],
+      [10,'c1',2026,'過年','開發設計部','黎光樺 建築師',1,0,0,0,'','','待備貨',false,'','[]','','{"A":0,"B":0,"C":0}','{}'],
+      [11,'c1',2026,'過年','公司','股東',4,0,0,0,'緒4、凱4','','待備貨',false,'','[]','','{"A":0,"B":0,"C":0}','{}'],
+      [12,'c2',2026,'過年','管理部','全體同仁',8,8,0,0,'','','待備貨',false,'','[]','','{"A":8,"B":0,"C":0}','{}'],
+      [13,'c2',2026,'過年','業務部','重要客戶 A',2,0,2,0,'','','待備貨',false,'','[]','','{"A":0,"B":2,"C":0}','{}']
     ];
     shPlan.getRange(2, 1, seed.length, PLAN_HEADERS.length).setValues(seed);
     shPlan.setFrozenRows(1);
   }
 
-  // 公司：沒有才建、空的才放範例
+  // 公司：沒有才建、空的才放範例（第3欄放各公司自訂禮盒類別的 JSON，預設空物件）
   var shCo = book.getSheetByName(SHEET_CO);
   if (!shCo) shCo = book.insertSheet(SHEET_CO);
   if (shCo.getLastRow() === 0) {
-    shCo.getRange(1, 1, 1, 2).setValues([['key', '名稱']]).setFontWeight('bold');
-    shCo.getRange(2, 1, 2, 2).setValues([['c1', '公司一'], ['c2', '公司二']]);
+    shCo.getRange(1, 1, 1, 3).setValues([['key', '名稱', '自訂類別JSON']]).setFontWeight('bold');
+    shCo.getRange(2, 1, 2, 3).setValues([['c1', '公司一', '{}'], ['c2', '公司二', '{}']]);
     shCo.setFrozenRows(1);
   }
 
