@@ -408,6 +408,9 @@
       <span class="muted" id="planStamp" style="font-size:12px"></span>
     </div>
     <div class="filters" style="margin-bottom:14px">
+      <select id="plYear" onchange="renderPlan()"></select>
+      <select id="plFest" onchange="renderPlan()">
+        <option>過年</option><option>端午</option><option>中秋</option></select>
       <select id="plCo" onchange="renderPlan()"><option value="">全部公司</option></select>
     </div>
     <div class="kpis" style="grid-template-columns:repeat(4,1fr)">
@@ -1755,14 +1758,31 @@ function renderTotal(){
   $('totalBody').innerHTML=html;
 }
 
-/* ---------- 規劃總表（完整內容，唯讀；各公司 × 年節 × 全欄位） ---------- */
+/* ---------- 規劃總表（完整內容，唯讀；依最近節日預設顯示） ---------- */
+function upcomingPlanningFest(d){
+  const year=d.getFullYear(), month=d.getMonth()+1;
+  if(month<=2) return {year, fest:'過年'};
+  if(month<=6) return {year, fest:'端午'};
+  if(month<=9) return {year, fest:'中秋'};
+  return {year:year+1, fest:'過年'};
+}
+let _planInit=false;
 function renderPlan(){
   if(!document.getElementById('planBody')) return;
+  const upcoming=upcomingPlanningFest(new Date());
+  const years=[...new Set(plan.map(r=>Number(r.year)).filter(Boolean).concat(upcoming.year))].sort((a,b)=>b-a);
+  const cy=$('plYear').value;
+  $('plYear').innerHTML=years.map(y=>`<option ${String(y)===cy?'selected':''}>${y}</option>`).join('');
+  if(!_planInit){
+    _planInit=true;
+    $('plYear').value=String(upcoming.year);
+    $('plFest').value=upcoming.fest;
+  }
   const cos=[...new Set(plan.map(r=>r.co))];
   const cc=$('plCo').value;
   $('plCo').innerHTML='<option value="">全部公司</option>'+cos.map(co=>`<option value="${co}" ${co===cc?'selected':''}>${he((companies[co]&&companies[co].name)||co)}</option>`).join('');
-  const fco=$('plCo').value;
-  const all=plan.filter(r=>!fco||r.co===fco);
+  const fy=$('plYear').value, ff=$('plFest').value, fco=$('plCo').value;
+  const all=plan.filter(r=>String(r.year)===String(fy)&&r.fest===ff&&(!fco||r.co===fco));
   $('pKpiTargets').textContent=all.length;
   $('pKpiPlan').textContent=all.reduce((s,r)=>s+(r.plan||0),0).toLocaleString();
   $('pKpiDone').textContent=all.filter(r=>r.status==='已送達').length;
