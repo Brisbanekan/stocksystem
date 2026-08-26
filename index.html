@@ -1763,7 +1763,7 @@ function upcomingPlanningFest(d){
   const year=d.getFullYear(), month=d.getMonth()+1;
   if(month<=2) return {year, fest:'過年'};
   if(month<=6) return {year, fest:'端午'};
-  if(month<=9) return {year, fest:'中秋'};
+  if(month<=11) return {year, fest:'中秋'};
   return {year:year+1, fest:'過年'};
 }
 let _planInit=false;
