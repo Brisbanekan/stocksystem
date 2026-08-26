@@ -653,17 +653,9 @@ function catColor(key){
   return CAT_PALETTE[h % CAT_PALETTE.length];
 }
 
-/* ---------- 資料（展示模式的後備範例；連線模式會被試算表覆蓋） ---------- */
+/* ---------- 資料（連線失敗時維持空白，避免顯示過期或範例資料） ---------- */
 let seq=1;
-let items = [
-  {id:seq++, cat:'A', name:'公益月餅禮盒',   spec:'8入/盒',     year:2026, fest:'中秋', unit:'盒', qty:120},
-  {id:seq++, cat:'B', name:'聖保羅蛋黃酥禮盒', spec:'12入/盒',    year:2026, fest:'中秋', unit:'盒', qty:80},
-  {id:seq++, cat:'C', name:'鬥茶王烏龍禮盒',   spec:'150g×2罐',   year:2026, fest:'過年', unit:'盒', qty:60},
-  {id:seq++, cat:'B', name:'聖保羅肉粽禮盒',   spec:'10入/盒',    year:2026, fest:'端午', unit:'盒', qty:45},
-  {id:seq++, cat:'A', name:'公益春節禮盒',     spec:'8入/盒',     year:2026, fest:'過年', unit:'盒', qty:80},
-  {id:seq++, cat:'B', name:'聖保羅春節禮盒',   spec:'12入/盒',    year:2026, fest:'過年', unit:'盒', qty:50},
-  {id:seq++, cat:'A', name:'公益鳳梨酥禮盒',   spec:'16入/盒',    year:2025, fest:'過年', unit:'盒', qty:0},
-];
+let items = [];
 let txs = [];
 
 /* ---------- 工具 ---------- */
@@ -963,13 +955,7 @@ function renderShipments(){
 let companies={c1:{name:'公司一'}, c2:{name:'公司二'}};
 let curCompany='c1';
 let pseq=1;
-let plan=[
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'員工',     target:'員工',   plan:10, cats:{A:10,B:0,C:0}, deliveredCats:{}, note:'', signer:'同右', status:'已備貨', shipped:false},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'員工',     target:'許雅君', plan:1,  cats:{A:1,B:0,C:0}, deliveredCats:{}, note:'', signer:'', status:'待備貨', shipped:false},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'業務部',   target:'呂文煜-水上鄉大崙村現任村長', plan:1, cats:{A:1,B:0,C:0}, deliveredCats:{}, note:'關懷社區事務、維持良好關係', signer:'', status:'待備貨', shipped:false},
-  {id:pseq++, co:'c1', year:2026, fest:'過年', dept:'公司',     target:'股東',   plan:4,  cats:{A:0,B:0,C:0}, deliveredCats:{}, note:'緒4、凱4', signer:'', status:'待備貨', shipped:false},
-  {id:pseq++, co:'c2', year:2026, fest:'過年', dept:'管理部',   target:'全體同仁', plan:8, cats:{A:8,B:0,C:0}, deliveredCats:{}, note:'', signer:'', status:'待備貨', shipped:false},
-];
+let plan=[];
 const STATUS=['待備貨','已備貨','已送達'];
 
 function switchCompany(co){
