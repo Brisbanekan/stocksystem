@@ -997,11 +997,17 @@ function gFiltered(){
   const y=$('gYear').value, f=$('gFest').value;
   return plan.filter(r=>r.co===curCompany && String(r.year)===String(y) && r.fest===f);
 }
+let _giftFestInit=false;
 function renderGiftYearFilter(){
-  const years=[...new Set(plan.filter(r=>r.co===curCompany).map(r=>r.year))].sort((a,b)=>b-a);
-  if(!years.length) years.push(new Date().getFullYear());
+  const upcoming=upcomingPlanningFest(new Date());
+  const years=[...new Set(plan.filter(r=>r.co===curCompany).map(r=>Number(r.year)).filter(Boolean).concat(upcoming.year))].sort((a,b)=>b-a);
   const cur=$('gYear').value;
   $('gYear').innerHTML=years.map(y=>`<option ${String(y)===cur?'selected':''}>${y}</option>`).join('');
+  if(!_giftFestInit){
+    _giftFestInit=true;
+    $('gYear').value=String(upcoming.year);
+    $('gFest').value=upcoming.fest;
+  }
 }
 function catSum(r){ const c=r.cats||{}; return Object.keys(c).reduce((s,k)=>s+(Number(c[k])||0),0); }
 /* 已分配＝實際已送達（已扣庫存）的數量加總，逐類別累計；未送達的類別不計入 */
